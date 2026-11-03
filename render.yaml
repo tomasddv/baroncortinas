@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: baron-cotizador
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
+    healthCheckPath: /health
+    # Los cambios de datos y fotos se leen desde GitHub sin reiniciar el servicio.
+    buildFilter:
+      ignoredPaths:
+        - data/**
+        - static/uploads/**
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: GITHUB_REPO
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: GITHUB_BRANCH
+        value: main

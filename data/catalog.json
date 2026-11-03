@@ -1,0 +1,159 @@
+{
+  "settings": {
+    "brand": "BARÓN",
+    "tagline": "Diseñamos la luz de tus espacios",
+    "whatsapp": "",
+    "currency": "ARS",
+    "markup_pct": 70,
+    "waste_pct": 8,
+    "waste_width_cm": 3,
+    "waste_height_cm": 20,
+    "roller_fabric_narrower_cm": 3.5,
+    "min_billable_m2": 1,
+    "base_hardware_cost": 7500,
+    "double_hardware_cost": 14000,
+    "traditional_hardware_cost": 6000,
+    "chain_costs": {
+      "Plástica": 0,
+      "Plástica con contrapeso": 6500,
+      "Metálica": 9500
+    },
+    "traditional_pleat_multiplier": {
+      "Fruncida": 1.8,
+      "Onda perfecta": 2.2
+    },
+    "max_width_cm": 300,
+    "max_height_cm": 300,
+    "min_width_cm": 30,
+    "min_height_cm": 30,
+    "shipping_message": "Cortinas a medida para toda Chubut. Consultá por disponibilidad de envío e instalación en tu ciudad.",
+    "measurement_note": "Indicá el ancho total de soporte a soporte. La tela roller es aprox. 3,5 cm más angosta; verificá las medidas antes de solicitar el pedido.",
+    "brand_logo": "",
+    "primary_color": "#292724",
+    "accent_color": "#aa8666",
+    "background_color": "#faf7f1"
+  },
+  "materials": [
+    {
+      "id": "bo-classic",
+      "name": "Blackout Clásico",
+      "family": "blackout",
+      "description": "Oscuridad y privacidad para dormitorios.",
+      "price": 19500,
+      "price_unit": "m2",
+      "roll_width_cm": 300,
+      "waste_pct": 0,
+      "active": true,
+      "photo": "",
+      "colors": [
+        {
+          "id": "blanco",
+          "name": "Blanco",
+          "hex": "#F4F2EC"
+        },
+        {
+          "id": "natural",
+          "name": "Natural",
+          "hex": "#E4D9C8"
+        },
+        {
+          "id": "gris",
+          "name": "Gris",
+          "hex": "#8F9091"
+        },
+        {
+          "id": "negro",
+          "name": "Negro",
+          "hex": "#292A2A"
+        }
+      ]
+    },
+    {
+      "id": "ss-economico",
+      "name": "Sun Screen 6% Económico",
+      "family": "sunscreen",
+      "description": "Filtra la luz, suaviza el reflejo.",
+      "price": 17500,
+      "price_unit": "m2",
+      "roll_width_cm": 250,
+      "waste_pct": 0,
+      "active": true,
+      "photo": "",
+      "colors": [
+        {
+          "id": "blanco",
+          "name": "Blanco",
+          "hex": "#F4F3ED"
+        },
+        {
+          "id": "beige",
+          "name": "Beige",
+          "hex": "#CDBDA8"
+        },
+        {
+          "id": "gris",
+          "name": "Gris",
+          "hex": "#92918C"
+        }
+      ]
+    },
+    {
+      "id": "ss-premium",
+      "name": "Sun Screen 5% Premium",
+      "family": "sunscreen",
+      "description": "Protección solar y acabado premium.",
+      "price": 29000,
+      "price_unit": "m2",
+      "roll_width_cm": 300,
+      "waste_pct": 1,
+      "active": true,
+      "photo": "",
+      "colors": [
+        {
+          "id": "blanco",
+          "name": "Blanco",
+          "hex": "#F8F7F0"
+        },
+        {
+          "id": "grafito",
+          "name": "Grafito",
+          "hex": "#55575A"
+        },
+        {
+          "id": "arena",
+          "name": "Arena",
+          "hex": "#C4B7A4"
+        }
+      ]
+    },
+    {
+      "id": "lino-natural",
+      "name": "Lino Texturado",
+      "family": "tela",
+      "description": "Tejido liviano con caída natural.",
+      "price": 24000,
+      "price_unit": "m2",
+      "roll_width_cm": 280,
+      "waste_pct": 5,
+      "active": true,
+      "photo": "",
+      "colors": [
+        {
+          "id": "marfil",
+          "name": "Marfil",
+          "hex": "#EFE8DB"
+        },
+        {
+          "id": "tostado",
+          "name": "Tostado",
+          "hex": "#B99C7D"
+        },
+        {
+          "id": "humo",
+          "name": "Humo",
+          "hex": "#A39E97"
+        }
+      ]
+    }
+  ]
+}

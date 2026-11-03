@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}{{ products[kind].name }} · Cotizar | {{settings.brand}}{% endblock %}
+
+{% block page %}configurator{% endblock %}
+{% block content %}
+<div class="shell configurator-wrapper"><div class="breadcrumbs"><a href="/">Colección</a><span>›</span>{{products[kind].name}}</div>
+<div class="config-grid"><main class="config-main"><div class="config-title"><span class="eyebrow">CONFIGURADOR A MEDIDA</span><h1>{{products[kind].name}}</h1><p>{{products[kind].subtitle}}. Personalizá cada detalle y calculá el valor al instante.</p></div>
+<form id="quote-form" data-kind="{{kind}}">
+  {% set family_names = {'blackout':'Tela Blackout','sunscreen':'Tela Sun Screen','tela':'Tela para cortina'} %}
+  {% for family in products[kind].families %}
+  <section class="config-section"><div class="config-section-heading"><span class="section-number">{{loop.index}}</span><div><h2>{{ family_names[family] }}</h2><p>Seleccioná la línea y el color que prefieras.</p></div></div>
+    {% set options = material_list | selectattr('family','equalto',family) | list %}
+    {% if options %}<div class="material-grid" data-family="{{family}}">
+    {% for m in options %}<label class="material-option"><input type="radio" name="material_{{family}}" value="{{m.id}}" {% if loop.first %}checked{% endif %}><span class="material-option-inner">
+      {% if m.photo %}<img loading="lazy" src="/media/{{m.photo}}" alt="Foto de {{m.name}}">{% else %}<span class="fabric-sample {{family}}"></span>{% endif %}
+      <span class="material-name">{{m.name}}</span><span class="material-desc">{{m.description}}</span><span class="check-icon">✓</span></span></label>{% endfor %}</div>
+    <div class="color-box"><h3>Color del material</h3><div class="color-choices" data-color-for="{{family}}"></div></div>
+    {% else %}<p class="inline-warning">No hay materiales disponibles en esta categoría. Agregalos desde administración.</p>{% endif %}
+  </section>
+  {% endfor %}
+  <section class="config-section"><div class="config-section-heading"><span class="section-number">{{products[kind].families|length+1}}</span><div><h2>Medidas exactas</h2><p>Tomá las medidas de la cortina, no solo del vidrio.</p></div></div>
+    <div class="dimensions"><label>Ancho total <span>cm</span><input id="width_cm" type="number" inputmode="decimal" step="0.5" min="{{settings.min_width_cm}}" max="{{settings.max_width_cm}}" value="120" required></label><span class="dimension-x">×</span><label>Alto total <span>cm</span><input id="height_cm" type="number" inputmode="decimal" step="0.5" min="{{settings.min_height_cm}}" max="{{settings.max_height_cm}}" value="150" required></label></div>
+    <div class="tip">ⓘ {{settings.measurement_note}}</div>
+  </section>
+  <section class="config-section"><div class="config-section-heading"><span class="section-number">{{products[kind].families|length+2}}</span><div><h2>Instalación y terminaciones</h2><p>Elegí cómo va a quedar instalada.</p></div></div>
+    <div class="field-group"><h3>Tipo de colocación</h3><div class="chip-options"><label><input type="radio" name="mount" value="Pared" checked><span>Pared</span></label><label><input type="radio" name="mount" value="Techo"><span>Techo</span></label></div></div>
+    {% if kind != 'tela' %}
+    <div class="field-group"><h3>Caída del rollo</h3><div class="chip-options"><label><input type="radio" name="drop" value="Detrás" checked><span>Por detrás</span></label><label><input type="radio" name="drop" value="Delante"><span>Por delante</span></label></div></div>
+    <div class="field-group"><h3>Posición del mando</h3><div class="chip-options"><label><input type="radio" name="side" value="Izquierda"><span>Izquierda</span></label><label><input type="radio" name="side" value="Derecha" checked><span>Derecha</span></label></div></div>
+    <div class="field-group"><h3>Tipo de cadena</h3><div class="chip-options">{% for chain in settings.chain_costs %}<label><input type="radio" name="chain" value="{{chain}}" {% if loop.first %}checked{% endif %}><span>{{chain}}</span></label>{% endfor %}</div></div>
+    {% else %}<div class="field-group"><h3>Tipo de confección</h3><div class="chip-options">{% for pleat in settings.traditional_pleat_multiplier %}<label><input type="radio" name="pleat" value="{{pleat}}" {% if loop.first %}checked{% endif %}><span>{{pleat}}</span></label>{% endfor %}</div></div>{% endif %}
+  </section>
+  <div class="mobile-summary"><p>Precio estimado</p><strong id="mobile-total">Calculando…</strong></div>
+</form></main>
+<aside class="quote-panel"><div class="quote-card"><div class="quote-top"><span class="eyebrow">TU CONFIGURACIÓN</span><span class="tag">Precio actualizado</span></div><div class="quote-image"><div class="quote-mini-window"><div class="quote-cover"></div></div></div><h3>{{products[kind].name}}</h3><div class="quote-desc" id="quote-description">Elegí tus materiales y medidas para ver el presupuesto.</div><div class="quote-qty"><label for="quantity">Cantidad de cortinas</label><div class="qty-control"><button type="button" data-qty="-1" aria-label="Restar cantidad">−</button><input id="quantity" type="number" min="1" max="30" value="1"><button type="button" data-qty="1" aria-label="Sumar cantidad">+</button></div></div><div class="quote-total"><span>Precio total</span><strong id="quote-total">Calculando…</strong><small>Precio estimativo en pesos argentinos, sujeto a confirmación final de medidas y stock.</small></div><div class="error-message" id="quote-error" role="alert"></div><button class="btn btn-primary full" id="add-to-cart" type="button" disabled>Agregar a mi pedido →</button><p class="quote-foot">♡ Fabricamos a medida de tus necesidades.</p></div></aside>
+</div></div>
+<script type="application/json" id="material-data">{{material_list|tojson}}</script>
+<script type="application/json" id="settings-data">{{public_settings|tojson}}</script>
+{% endblock %}

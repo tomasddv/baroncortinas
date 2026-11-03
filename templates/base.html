@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#292724">
+  <title>{% block title %}BARÓN | Cortinas a medida{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('theme_css') }}">
+  <script defer src="{{ url_for('static',filename='app.js') }}"></script>
+</head>
+<body data-page="{% block page %}default{% endblock %}">
+<header class="topbar">
+  <div class="shell topbar-inner">
+    <a class="logo" href="/" aria-label="BARÓN — inicio">{% if brand_settings.brand_logo %}<img class="logo-image" src="{{ url_for('material_image',key=brand_settings.brand_logo) }}" alt="Logo de BARÓN">{% else %}<span class="logo-mark">B</span><span class="logo-type">BARÓN<span class="logo-dot">.</span></span>{% endif %}</a>
+    <nav class="nav"><a href="/#coleccion">Colección</a><a href="/#como-funciona">Cómo comprar</a>{% if is_admin %}<a href="/admin">Administrar</a>{% endif %}<a href="/carrito" class="cart-link">Mi pedido <span class="cart-count" id="cart-count">0</span></a></nav>
+  </div>
+</header>
+{% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}
+<div class="shell alerts">{% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}</div>
+{% endif %}{% endwith %}
+{% block content %}{% endblock %}
+<footer class="footer"><div class="shell footer-inner"><div><strong>BARÓN.</strong><p>Diseño, luz y textura a tu medida.</p></div><div><a href="/">Inicio</a><a href="/carrito">Mi pedido</a>{% if is_admin %}<a href="/admin">Administración</a>{% endif %}</div></div></footer>
+</body></html>
