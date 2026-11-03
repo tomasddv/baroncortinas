@@ -39,12 +39,12 @@
       "name": "Blackout Clásico",
       "family": "blackout",
       "description": "Oscuridad y privacidad para dormitorios.",
-      "price": 19500,
+      "price": 19500.0,
       "price_unit": "m2",
-      "roll_width_cm": 300,
-      "waste_pct": 0,
+      "roll_width_cm": 300.0,
+      "waste_pct": 0.0,
       "active": true,
-      "photo": "",
+      "photo": "ab7fef28898e4f92b0cbeec9690db8d1.png",
       "colors": [
         {
           "id": "blanco",
