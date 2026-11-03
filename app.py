@@ -14,11 +14,12 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from storage import StorageError, load_catalog, read_image, remote_enabled, save_catalog, save_image, storage_label
 from manufacturing import bp as manufacturing_bp, calculate_hardware
+from marketing import bp as marketing_bp
 
 app = Flask(__name__)
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY") or (secrets.token_hex(32) if not os.environ.get("RENDER") else None),
-    MAX_CONTENT_LENGTH=3 * 1024 * 1024,
+    MAX_CONTENT_LENGTH=10 * 1024 * 1024,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=bool(os.environ.get("RENDER")),
@@ -26,6 +27,7 @@ app.config.update(
 if not app.config['SECRET_KEY']:
     raise RuntimeError("En Render es obligatorio configurar SECRET_KEY")
 app.register_blueprint(manufacturing_bp)
+app.register_blueprint(marketing_bp)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"], salt="cotizador-presupuesto-v1")
 PRODUCTS = {
     "blackout": {"name": "Roller Blackout", "subtitle": "Oscuridad total y privacidad", "families": ["blackout"]},
@@ -127,8 +129,9 @@ def price_quote(cfg, body):
             estimated_unit = "m²"
         fabric_cost += material_cost
         selected.append({"family":fam,"material_id":material["id"],"material":material["name"],"color_id":color["id"],"color":color["name"]})
-        consumption.append({"material":material["name"],"quantity":round(estimated_qty,3),"unit":estimated_unit,"waste_pct":waste_pct,"cut_width_cm":round(cut_width,1),"cut_height_cm":round(cut_height,1),"unit_cost":float(color.get("price_override",material["price"])),"subtotal":round(material_cost,2)})
-    hardware, component_lines, recipe_used = calculate_hardware(cfg, kind, w, h, chain, chain_costs)
+        consumption.append({"material":material["name"],"quantity":round(estimated_qty,3),"unit":estimated_unit,"waste_pct":waste_pct,"cut_width_cm":round(cut_width,1),"cut_height_cm":round(cut_height,1)})
+    hardware, component_lines, recipe_used = calculate_hardware(
+        cfg, kind, w, h, chain, chain_costs, mount=mount, drop=drop, side=side, pleat=pleat)
     total_cost = fabric_cost + hardware
     markup = number(settings.get("markup_pct",0), "Recargo de venta", 0, 1000)
     unit_price = as_int(total_cost * (1 + markup/100))
@@ -163,7 +166,7 @@ def security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' https:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     if request.path.startswith("/admin"):
         response.headers["Cache-Control"] = "no-store"
     return response
@@ -281,14 +284,14 @@ def checkout_api():
 
 @app.get("/media/<key>")
 def material_image(key):
-    if not re.fullmatch(r"[a-zA-Z0-9_-]+\.(png|jpg|jpeg|webp)",key):
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+\.(png|jpg|jpeg|webp|mp4)",key):
         abort(404)
     try:
         raw=read_image(key)
     except (FileNotFoundError,StorageError):
         abort(404)
-    mimetype="image/png" if key.endswith("png") else "image/webp" if key.endswith("webp") else "image/jpeg"
-    return send_file(BytesIO(raw), mimetype=mimetype, max_age=300)
+    mimetype="video/mp4" if key.endswith("mp4") else "image/png" if key.endswith("png") else "image/webp" if key.endswith("webp") else "image/jpeg"
+    return send_file(BytesIO(raw), mimetype=mimetype, max_age=300, conditional=True)
 
 @app.route("/admin/login",methods=["GET","POST"])
 def admin_login():
@@ -334,13 +337,26 @@ def admin_cost_preview():
                 raise ValueError("No hay materiales activos para " + fam)
             material=available[0]
             selections[fam]={"material_id":material["id"],"color_id":material["colors"][0]["id"]}
+        choices={
+            "mount":request.args.get("mount", "Pared"),
+            "drop":request.args.get("drop", "Detrás"),
+            "side":request.args.get("side", "Derecha"),
+            "chain":request.args.get("chain", "Plástica"),
+            "pleat":request.args.get("pleat", "Fruncida"),
+        }
         quote, detail=price_quote(cfg,{"kind":kind,"width_cm":width,"height_cm":height,"quantity":1,
-            "selections":selections,"chain":"Plástica","mount":"Pared","drop":"Detrás","side":"Derecha","pleat":"Fruncida"})
+            "selections":selections,**choices})
         error=None
     except (ValueError,KeyError,TypeError,StorageError) as exc:
         quote,detail,error=None,None,str(exc)
     return render_template("despiece.html",models=PRODUCTS,kind=kind,width=request.args.get("width_cm",120),
-        height=request.args.get("height_cm",150),quote=quote,detail=detail,error=error)
+        height=request.args.get("height_cm",150),quote=quote,detail=detail,error=error,
+        choices={key:request.args.get(key,default) for key,default in
+                 (("mount","Pared"),("drop","Detrás"),("side","Derecha"),("chain","Plástica"),("pleat","Fruncida"))},
+        available_choices={"mount":["Pared","Techo"],"drop":["Detrás","Delante"],
+                           "side":["Izquierda","Derecha"],
+                           "chain":list(cfg["settings"].get("chain_costs",{})),
+                           "pleat":list(cfg["settings"].get("traditional_pleat_multiplier",{}))})
 
 @app.post("/admin/logo")
 def upload_brand_logo():

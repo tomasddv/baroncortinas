@@ -1,0 +1,33 @@
+{% extends 'base.html' %}{% block title %}Fotos y videos · BARÓN{% endblock %}
+{% block content %}
+<div class="shell material-editor">
+  <div class="breadcrumbs"><a href="/admin">Administración</a><span>›</span>Fotos y videos de la colección</div>
+  <div class="editor-heading"><div><span class="eyebrow">CONTENIDO VISUAL</span><h1>Imágenes y videos reales</h1><p>Elegí la foto o el video que verá el cliente en cada tarjeta de la colección.</p></div><a class="btn btn-outline" href="/admin">← Panel principal</a></div>
+  <div class="admin-help"><strong>Importante:</strong> las portadas de la colección son independientes de las fotos de cada tela/color. Las fotos admiten JPG, PNG o WEBP (hasta 1,5 MB). Los videos admiten MP4 (hasta 8 MB) o un enlace directo HTTPS a un MP4 externo. Se reproducen sin sonido, automáticamente y en bucle. Para videos largos, conviene alojarlos fuera de GitHub.</div>
+  <div class="media-admin-grid">
+  {% for kind,label in models.items() %}
+    {% set cover=covers.get(kind) %}
+    <section class="media-admin-card" id="{{kind}}">
+      <span class="eyebrow">MODELO {{loop.index}} / 4</span><h2>{{label}}</h2>
+      <div class="media-admin-preview">
+        {% if cover and cover.type == 'image' %}<img src="/media/{{cover.value}}" alt="Portada actual de {{label}}">
+        {% elif cover and cover.type == 'video' %}<video controls muted playsinline preload="metadata" src="{{ '/media/' + cover.value if cover.source == 'upload' else cover.value }}"></video>
+        {% else %}<span>Ilustración original activa</span>{% endif %}
+      </div>
+      <form method="post" action="/admin/portadas/{{kind}}" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="{{csrf_token()}}">
+        <fieldset><legend>Elegí qué mostrar</legend>
+          <label><input type="radio" name="mode" value="image" checked> Subir fotografía</label>
+          <label><input type="radio" name="mode" value="video"> Subir video MP4 (máx. 8 MB)</label>
+          <label><input type="radio" name="mode" value="video_url"> Usar enlace directo a video MP4</label>
+          <label><input type="radio" name="mode" value="reset"> Restaurar ilustración original</label>
+        </fieldset>
+        <label>Foto o video<input type="file" name="media" accept="image/jpeg,image/png,image/webp,video/mp4"></label>
+        <label>Enlace externo (solo para la tercera opción)<input type="url" name="video_url" placeholder="https://servidor.com/cortina.mp4"></label>
+        <button class="btn btn-primary" type="submit">Guardar portada →</button>
+      </form>
+    </section>
+  {% endfor %}
+  </div>
+</div>
+{% endblock %}

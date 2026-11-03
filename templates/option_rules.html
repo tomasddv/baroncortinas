@@ -1,0 +1,26 @@
+{% extends 'base.html' %}{% block title %}Costos por opción · BARÓN{% endblock %}
+{% block page %}option-rules{% endblock %}
+{% block content %}
+<div class="shell material-editor">
+  <div class="breadcrumbs"><a href="/admin">Administración</a><span>›</span>Costos por opción elegida</div>
+  <div class="editor-heading"><div><span class="eyebrow">PRECIOS INTELIGENTES</span><h1>Costos por instalación y terminación</h1><p>Una receta base por modelo. Estas reglas agregan insumos únicamente cuando el cliente elige una opción determinada.</p></div><a class="btn btn-outline" href="/admin/recetas">Recetas base</a></div>
+  <div class="admin-help"><strong>Cómo funciona:</strong> si elegís «Cadena → Metálica», el sistema suma solo los insumos asociados a esa elección. Para «Pared» y «Techo» podés cargar soportes diferentes. Si una opción no modifica el costo, no necesitás agregar una regla. <strong>No cargues el mismo soporte o cadena en la receta base y en estas reglas</strong>, porque se duplicaría el costo. Si cargás alguna regla de cadena para un modelo, se desactivan para ese modelo los antiguos adicionales fijos de cadena.</div>
+  {% if not components %}<div class="inline-warning">Primero agregá los insumos desde <a href="/admin/componentes">Administrar insumos</a>.</div>{% endif %}
+  {% for kind,label in models.items() %}
+  <section class="admin-block" id="{{kind}}">
+    <div class="admin-block-header"><div><span class="eyebrow">MODELO {{loop.index}} / 4</span><h2>{{label}}</h2><p>Configurá los componentes de cada alternativa. Podés sumar varios insumos para la misma elección.</p></div></div>
+    <form action="/admin/opciones/{{kind}}" method="post" data-option-model="{{kind}}">
+      <input type="hidden" name="csrf" value="{{csrf_token()}}">
+      <div class="admin-table-wrap"><table class="admin-table option-rule-table"><thead><tr><th>Opción</th><th>Elección del cliente</th><th>Insumo que se suma</th><th>Consumo</th><th>Factor</th><th>Merma %</th><th></th></tr></thead><tbody data-option-rows></tbody></table></div>
+      <div class="option-rules-actions"><button type="button" class="btn btn-outline" data-add-option {% if not components %}disabled{% endif %}>+ Agregar condición</button><button type="submit" class="btn btn-primary">Guardar opciones de {{label}} →</button></div>
+      <p class="small-note">Ejemplo: «Colocación / Techo / Soporte techo / Cantidad fija / 2» suma dos soportes solo cuando el cliente elige techo. Los insumos por unidad se redondean hacia arriba.</p>
+    </form>
+  </section>
+  {% endfor %}
+  <div class="editor-actions"><a class="btn btn-primary" href="/admin/simulador">Probar combinaciones en el simulador →</a><a class="btn btn-outline" href="/admin">← Panel principal</a></div>
+</div>
+<script type="application/json" id="option-rules-data">{{option_rules|tojson}}</script>
+<script type="application/json" id="option-choices-data">{{options_by_model|tojson}}</script>
+<script type="application/json" id="option-components-data">{{components|tojson}}</script>
+<script type="application/json" id="option-modes-data">{{modes|tojson}}</script>
+{% endblock %}

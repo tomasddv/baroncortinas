@@ -40,56 +40,96 @@ def numeric(raw, label, minimum=0, maximum=1_000_000_000):
     return value
 
 
-def calculate_hardware(cfg, kind, width_cm, height_cm, chain, chain_costs):
-    """Return (cost, itemized lines, recipe_used) for one finished curtain."""
+def available_options(cfg, kind):
+    """Choices must match the actual configurator and server-side validation."""
+    options = {"mount": ["Pared", "Techo"]}
+    if kind == "tela":
+        options["pleat"] = list(cfg["settings"].get("traditional_pleat_multiplier", {"Fruncida": 1.8}).keys())
+    else:
+        options.update({
+            "drop": ["Detrás", "Delante"],
+            "side": ["Izquierda", "Derecha"],
+            "chain": list(cfg["settings"].get("chain_costs", {"Plástica": 0}).keys()),
+        })
+    return options
+
+
+def _calculate_lines(recipe, components, width_cm, height_cm, prefix=""):
+    """Calculate a recipe's cost, never trusting unit costs from client input."""
+    lines = []
+    for item in recipe:
+        component = components.get(item.get("component_id"))
+        if not component or not component.get("active", True):
+            raise ValueError("Hay un insumo inactivo o inexistente en las recetas. Revisá Administración.")
+        mode = item.get("mode", "fijo")
+        if mode not in MODES:
+            raise ValueError("Regla de fabricación no reconocida")
+        factor = numeric(item.get("factor", 1), "Cantidad de insumo", 0, 100000)
+        waste = numeric(item.get("waste_pct", 0), "Merma del insumo", 0, 80)
+        if mode == "fijo":
+            base = 1
+        elif mode == "ancho_m":
+            base = width_cm / 100
+        elif mode == "alto_m":
+            base = height_cm / 100
+        elif mode == "perimetro_m":
+            base = 2 * (width_cm + height_cm) / 100
+        elif mode == "area_m2":
+            base = width_cm * height_cm / 10000
+        elif mode == "cada_50cm_ancho":
+            base = math.ceil(width_cm / 50)
+        else:
+            base = math.ceil(width_cm / 100)
+        qty = base * factor * (1 + waste / 100)
+        unit = component.get("unit", "unidad")
+        if unit == "unidad":
+            qty = math.ceil(qty - 1e-9)
+        else:
+            qty = round(qty, 4)
+        unit_cost = numeric(component.get("unit_cost", 0), "Costo de insumo")
+        lines.append({
+            "name": component["name"], "quantity": qty,
+            "unit": UNITS.get(unit, unit), "unit_cost": unit_cost,
+            "subtotal": round(qty * unit_cost, 2),
+            "mode": prefix + MODES[mode],
+        })
+    return lines
+
+
+def calculate_hardware(cfg, kind, width_cm, height_cm, chain, chain_costs,
+                       mount="Pared", drop="Detrás", side="Derecha", pleat="Fruncida"):
+    """One base BOM + matching conditional BOM lines. Never multiply recipes per combination."""
     recipe = cfg.get("recipes", {}).get(kind) or []
     components = {item["id"]: item for item in cfg.get("components", [])}
-    lines = []
     if recipe:
-        for item in recipe:
-            component = components.get(item.get("component_id"))
-            if not component or not component.get("active", True):
-                raise ValueError("La receta de fabricación contiene un insumo inexistente o inactivo. Revisá Administración.")
-            mode = item.get("mode", "fijo")
-            factor = numeric(item.get("factor", 1), "Cantidad de insumo", 0, 100000)
-            waste = numeric(item.get("waste_pct", 0), "Merma del insumo", 0, 80)
-            if mode == "fijo":
-                base = 1
-            elif mode == "ancho_m":
-                base = width_cm / 100
-            elif mode == "alto_m":
-                base = height_cm / 100
-            elif mode == "perimetro_m":
-                base = 2 * (width_cm + height_cm) / 100
-            elif mode == "area_m2":
-                base = width_cm * height_cm / 10000
-            elif mode == "cada_50cm_ancho":
-                base = math.ceil(width_cm / 50)
-            elif mode == "cada_100cm_ancho":
-                base = math.ceil(width_cm / 100)
-            else:
-                raise ValueError("Regla de fabricación no reconocida")
-            qty = base * factor * (1 + waste / 100)
-            unit = component.get("unit", "unidad")
-            if unit == "unidad":
-                qty = math.ceil(qty - 1e-9)
-            else:
-                qty = round(qty, 4)
-            unit_cost = numeric(component.get("unit_cost", 0), "Costo de insumo")
-            lines.append({
-                "name": component["name"], "quantity": qty,
-                "unit": UNITS.get(unit, unit), "unit_cost": unit_cost,
-                "subtotal": round(qty * unit_cost, 2), "mode": MODES[mode],
-            })
+        lines = _calculate_lines(recipe, components, width_cm, height_cm)
     else:
         settings = cfg["settings"]
         key = "double_hardware_cost" if kind == "doble" else "traditional_hardware_cost" if kind == "tela" else "base_hardware_cost"
         flat = numeric(settings.get(key, 0), "Costo fijo de accesorios")
-        lines.append({"name": "Accesorios (costo fijo anterior)", "quantity": 1, "unit": "Unidad", "unit_cost": flat, "subtotal": flat, "mode": "Costo fijo"})
-    if kind != "tela":
+        lines = [{"name": "Accesorios (costo fijo anterior)", "quantity": 1,
+                  "unit": "Unidad", "unit_cost": flat, "subtotal": flat, "mode": "Costo fijo"}]
+
+    selected = {"mount": mount, "drop": drop, "side": side, "chain": chain, "pleat": pleat}
+    allowed = available_options(cfg, kind)
+    rules = cfg.get("option_rules", {}).get(kind) or []
+    for rule in rules:
+        key, value = rule.get("option_key"), rule.get("option_value")
+        if key not in allowed or value not in allowed[key]:
+            raise ValueError("Hay una regla de opción desactualizada. Revisá Administración > Opciones.")
+        if selected[key] == value:
+            lines.extend(_calculate_lines([rule], components, width_cm, height_cm,
+                                          prefix=f"{key}: {value} · "))
+
+    # Legacy chain extras apply only until any conditional chain rules are defined
+    # for this model. Otherwise a configured chain would be charged twice.
+    has_chain_rules = any(rule.get("option_key") == "chain" for rule in rules)
+    if kind != "tela" and not has_chain_rules:
         extra = numeric(chain_costs.get(chain, 0), "Costo adicional de cadena")
         if extra:
-            lines.append({"name": f"Adicional cadena {chain}", "quantity": 1, "unit": "Unidad", "unit_cost": extra, "subtotal": extra, "mode": "Según opción seleccionada"})
+            lines.append({"name": f"Adicional cadena {chain}", "quantity": 1,
+                          "unit": "Unidad", "unit_cost": extra, "subtotal": extra,
+                          "mode": "Adicional anterior según cadena"})
     return round(sum(line["subtotal"] for line in lines), 2), lines, bool(recipe)
 
 
@@ -211,3 +251,51 @@ def color_variant_save(material_id, color_id):
     except (ValueError, StorageError) as exc:
         flash(str(exc), "error")
     return redirect(url_for("material_editor", material_id=material_id) + "#variantes")
+
+
+@bp.get("/admin/opciones")
+def option_rules_page():
+    cfg = load_catalog()
+    return render_template(
+        "option_rules.html", models=PRODUCT_LABELS,
+        option_rules=cfg.get("option_rules", {}),
+        options_by_model={kind: available_options(cfg, kind) for kind in PRODUCT_LABELS},
+        components=[c for c in cfg.get("components", []) if c.get("active", True)],
+        modes=MODES,
+    )
+
+
+@bp.post("/admin/opciones/<kind>")
+def option_rules_save(kind):
+    if kind not in PRODUCT_LABELS:
+        abort(404)
+    cfg = load_catalog()
+    allowed = available_options(cfg, kind)
+    active_components = {c["id"] for c in cfg.get("components", []) if c.get("active", True)}
+    f = request.form
+    fields = [f.getlist(key) for key in
+              ("option_key", "option_value", "component_id", "mode", "factor", "waste_pct")]
+    try:
+        if len({len(values) for values in fields}) != 1:
+            raise ValueError("Hay una fila incompleta en las reglas de opciones")
+        if len(fields[0]) > 120:
+            raise ValueError("Máximo 120 reglas por modelo")
+        rows = []
+        for key, value, component_id, mode, factor, waste in zip(*fields):
+            if key not in allowed or value not in allowed[key]:
+                raise ValueError("Seleccioná una opción válida para este modelo")
+            if component_id not in active_components:
+                raise ValueError("Seleccioná un insumo activo")
+            if mode not in MODES:
+                raise ValueError("Regla de cantidad inválida")
+            rows.append({
+                "option_key": key, "option_value": value, "component_id": component_id,
+                "mode": mode, "factor": numeric(factor, "Factor", 0.001, 100000),
+                "waste_pct": numeric(waste, "Merma", 0, 80),
+            })
+        cfg.setdefault("option_rules", {})[kind] = rows
+        save_catalog(cfg)
+        flash(f"Reglas de {PRODUCT_LABELS[kind]} guardadas", "success")
+    except (ValueError, StorageError) as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("manufacturing.option_rules_page") + "#" + kind)

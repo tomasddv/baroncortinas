@@ -5,11 +5,18 @@
 <form class="editor-form manufacturing-form" method="get" action="/admin/simulador"><div class="admin-field-grid">
 <label>Modelo<select name="kind">{% for code,prod in models.items() %}<option value="{{code}}" {% if kind==code %}selected{% endif %}>{{prod.name}}</option>{% endfor %}</select></label>
 <label>Ancho (cm)<input type="number" name="width_cm" min="30" max="300" step="0.5" value="{{width}}" required></label>
-<label>Alto (cm)<input type="number" name="height_cm" min="30" max="300" step="0.5" value="{{height}}" required></label></div><button class="btn btn-primary" type="submit">Recalcular →</button><p class="small-note">Para esta vista se utiliza automáticamente el primer material activo de cada familia y la cadena plástica. El cliente puede elegir otros materiales y opciones en la tienda.</p></form>
+<label>Alto (cm)<input type="number" name="height_cm" min="30" max="300" step="0.5" value="{{height}}" required></label>
+<label>Colocación<select name="mount">{% for v in available_choices.mount %}<option value="{{v}}" {% if choices.mount==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>
+{% if kind != 'tela' %}
+<label>Caída<select name="drop">{% for v in available_choices.drop %}<option value="{{v}}" {% if choices.drop==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>
+<label>Mando<select name="side">{% for v in available_choices.side %}<option value="{{v}}" {% if choices.side==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>
+<label>Cadena<select name="chain">{% for v in available_choices.chain %}<option value="{{v}}" {% if choices.chain==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>
+{% else %}<label>Confección<select name="pleat">{% for v in available_choices.pleat %}<option value="{{v}}" {% if choices.pleat==v %}selected{% endif %}>{{v}}</option>{% endfor %}</select></label>{% endif %}
+</div><button class="btn btn-primary" type="submit">Recalcular →</button><p class="small-note">Para esta vista se utiliza el primer material activo de cada familia. Probá distintas terminaciones para verificar que el costo cambia según los componentes configurados.</p></form>
 {% if error %}<div class="inline-warning">{{error}}</div>{% elif detail %}
 <div class="admin-block"><h2>Despiece de {{quote.product}}</h2><p>{{quote.width_cm}} × {{quote.height_cm}} cm · {{'Receta detallada' if detail.recipe_used else 'Costo fijo anterior (sin receta)'}}</p>
 <div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Elemento</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th></tr></thead><tbody>
-{% for c in detail.consumption %}<tr><td>Tela: {{c.material}}</td><td>{{c.quantity}} {{c.unit}}</td><td>$ {{'{:,.2f}'.format(c.unit_cost).replace(',','X').replace('.',',').replace('X','.')}}</td><td>$ {{'{:,.2f}'.format(c.subtotal).replace(',','X').replace('.',',').replace('X','.')}}</td></tr>{% endfor %}
+{% for c in detail.consumption %}<tr><td>Tela: {{c.material}}</td><td>{{c.quantity}} {{c.unit}}</td><td>Incluido en costo de tela</td><td>—</td></tr>{% endfor %}
 <tr><td><strong>Subtotal telas</strong></td><td></td><td></td><td><strong>$ {{'{:,.2f}'.format(detail.fabric_cost).replace(',','X').replace('.',',').replace('X','.')}}</strong></td></tr>
 {% for line in detail.components %}<tr><td>{{line.name}}<small class="recipe-meta">{{line.mode}}</small></td><td>{{line.quantity}} {{line.unit}}</td><td>$ {{'{:,.2f}'.format(line.unit_cost).replace(',','X').replace('.',',').replace('X','.')}}</td><td>$ {{'{:,.2f}'.format(line.subtotal).replace(',','X').replace('.',',').replace('X','.')}}</td></tr>{% endfor %}
 <tr><td><strong>Costo total de fabricación</strong></td><td></td><td></td><td><strong>$ {{'{:,.2f}'.format(detail.cost_per_unit).replace(',','X').replace('.',',').replace('X','.')}}</strong></td></tr>

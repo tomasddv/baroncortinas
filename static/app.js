@@ -12,6 +12,7 @@
   $$('[data-confirm]').forEach(btn=>btn.addEventListener('click',ev=>{if(!confirm(btn.dataset.confirm))ev.preventDefault()}));
   if(document.body.dataset.page==='configurator') setupConfigurator();
   if(document.body.dataset.page==='cart') setupCart();
+  if(document.body.dataset.page==='option-rules') setupOptionRules();
   function setupConfigurator(){
     const frm=$('#quote-form'),kind=frm.dataset.kind, mats=parseJSON('material-data');
     const families=kind==='doble'?['blackout','sunscreen']:[kind==='tela'?'tela':kind];
@@ -64,6 +65,39 @@
     $('#quantity').addEventListener('input',queueQuote);
     add.addEventListener('click',()=>{if(!latestQuote)return;const cart=getCart();cart.push(latestQuote);putCart(cart);window.location.href='/carrito'});
     quote();
+  }
+  function setupOptionRules(){
+    const allRules=parseJSON('option-rules-data');
+    const allOptions=parseJSON('option-choices-data');
+    const allComponents=parseJSON('option-components-data');
+    const modes=parseJSON('option-modes-data');
+    const makeSelect=(name,options,selected)=>{
+      const el=document.createElement('select');el.name=name;el.required=true;
+      Object.entries(options).forEach(([value,label])=>{
+        const op=document.createElement('option');op.value=value;op.textContent=label;
+        if(value===selected)op.selected=true;el.append(op);
+      });return el;
+    };
+    const td=(el)=>{const cell=document.createElement('td');cell.append(el);return cell};
+    $$('[data-option-model]').forEach(form=>{
+      const kind=form.dataset.optionModel, choices=allOptions[kind]||{}, tbody=$('[data-option-rows]',form);
+      function addRow(row={}){
+        const tr=document.createElement('tr'), keySelect=makeSelect('option_key',Object.fromEntries(Object.keys(choices).map(k=>[k,({mount:'Colocación',drop:'Caída',side:'Mando',chain:'Cadena',pleat:'Confección'})[k]||k])),row.option_key);
+        const valueSelect=document.createElement('select');valueSelect.name='option_value';valueSelect.required=true;
+        function fillValues(preferred){valueSelect.replaceChildren();(choices[keySelect.value]||[]).forEach(v=>{const opt=document.createElement('option');opt.value=v;opt.textContent=v;if(v===preferred)opt.selected=true;valueSelect.append(opt)})}
+        fillValues(row.option_value);keySelect.addEventListener('change',()=>fillValues());
+        const compSelect=makeSelect('component_id',Object.fromEntries(allComponents.map(c=>[c.id,c.name+' · $'+Number(c.unit_cost).toLocaleString('es-AR')+'/'+c.unit])),row.component_id);
+        const modeSelect=makeSelect('mode',modes,row.mode||'fijo');
+        function numberInput(name,value,min,max,step){const el=document.createElement('input');el.type='number';el.name=name;el.min=min;el.max=max;el.step=step;el.value=value;el.required=true;return el}
+        const factor=numberInput('factor',row.factor??1,0.001,100000,0.001);
+        const waste=numberInput('waste_pct',row.waste_pct??0,0,80,0.1);
+        const del=document.createElement('button');del.type='button';del.textContent='Quitar';del.addEventListener('click',()=>tr.remove());
+        [keySelect,valueSelect,compSelect,modeSelect,factor,waste,del].forEach(x=>tr.append(td(x)));
+        tbody.append(tr);
+      }
+      (allRules[kind]||[]).forEach(addRow);
+      $('[data-add-option]',form)?.addEventListener('click',()=>addRow());
+    });
   }
   function setupCart(){
     const store=parseJSON('store-data'), el=$('#cart-items'),total=$('#cart-total'), error=$('#cart-error');
