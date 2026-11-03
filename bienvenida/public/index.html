@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08256f">
+  <meta name="description" content="BARÓN Cortinas a medida. Estamos preparando tu experiencia de cotización.">
+  <title>BARÓN | Preparando tu experiencia</title>
+  <style>
+    :root { color-scheme: light; --navy:#08256f; --deep:#051b52; --gold:#d6b27c; --paper:#f7f5f0; --muted:#ccd5e8; }
+    * { box-sizing:border-box; }
+    html, body { min-height:100%; margin:0; }
+    body { font-family:Inter,Arial,Helvetica,sans-serif; background:var(--deep); color:#fff; }
+    .page { min-height:100svh; display:flex; flex-direction:column; overflow:hidden; position:relative;
+      background:radial-gradient(ellipse 70% 55% at 50% 37%,#123b99 0%,var(--navy) 54%,var(--deep) 100%); }
+    .page::before { content:""; position:absolute; inset:0; pointer-events:none; opacity:.12;
+      background-image:linear-gradient(90deg,transparent 49.8%,#fff 50%,transparent 50.2%),linear-gradient(0deg,transparent 49.8%,#fff 50%,transparent 50.2%);
+      background-size:160px 160px; mask-image:linear-gradient(to bottom,transparent 0%,#000 35%,transparent 100%); }
+    .top { width:min(1180px,calc(100% - 48px)); margin:0 auto; padding-top:34px; display:flex; justify-content:space-between; align-items:center; position:relative; z-index:1; }
+    .brand { display:flex; align-items:center; gap:13px; color:#fff; text-decoration:none; }
+    .brand-mark { display:grid; place-items:center; width:40px; height:46px; border:1px solid #fff9; border-radius:14px; font:700 29px Georgia,serif; }
+    .brand-name { font:700 27px Georgia,'Times New Roman',serif; letter-spacing:.15em; }
+    .brand-name i { color:var(--gold); font-style:normal; }
+    .top-note { font-size:11px; letter-spacing:.18em; color:#d7deef; text-transform:uppercase; }
+    main { flex:1; width:min(850px,calc(100% - 44px)); margin:auto; padding:65px 0 75px; text-align:center; position:relative; z-index:1; }
+    .eyebrow { display:inline-flex; gap:11px; align-items:center; color:var(--gold); letter-spacing:.24em; font-size:11px; font-weight:700; text-transform:uppercase; }
+    .eyebrow::before,.eyebrow::after { content:""; display:block; height:1px; width:30px; background:var(--gold); opacity:.7; }
+    h1 { font:400 clamp(42px,7vw,82px)/1.08 Georgia,'Times New Roman',serif; letter-spacing:-.035em; margin:30px 0 20px; }
+    h1 em { font-weight:400; font-style:italic; color:#f1d5ab; }
+    .lead { color:#dce4f4; max-width:530px; margin:0 auto; font-size:clamp(15px,2.3vw,18px); line-height:1.7; }
+    .loader { width:min(400px,100%); margin:50px auto 0; }
+    .track { height:3px; border-radius:3px; background:#ffffff3a; overflow:hidden; }
+    .track span { display:block; width:36%; height:100%; background:linear-gradient(90deg,transparent,var(--gold),#fff0db); border-radius:3px; animation:travel 2s ease-in-out infinite alternate; }
+    @keyframes travel { from {transform:translateX(-100%)} to {transform:translateX(285%)} }
+    .status { margin-top:20px; min-height:25px; color:#f3f3f3; font-size:13px; letter-spacing:.025em; }
+    .time { color:#b8c7e4; font-size:12px; margin-top:8px; min-height:20px; }
+    .fallback { display:none; margin:30px auto 0; max-width:530px; }
+    .fallback.visible { display:block; }
+    .fallback p { color:#dce4f4; line-height:1.55; font-size:13px; }
+    .fallback a { display:inline-block; padding:13px 22px; border:1px solid #e5cfac; color:#fff; text-decoration:none; border-radius:9px; font-size:13px; font-weight:700; }
+    footer { width:min(1180px,calc(100% - 48px)); margin:0 auto; padding:22px 0 28px; display:flex; justify-content:space-between; gap:15px; border-top:1px solid #ffffff29; position:relative; z-index:1; }
+    footer span { font-size:11px; letter-spacing:.1em; color:#b8c7e4; }
+    @media (max-width:550px) { .top { padding-top:22px; } .top-note { display:none; } .brand-name {font-size:23px;} main {padding:60px 0;} h1 {margin:24px 0 16px;} .loader {margin-top:40px;} footer {flex-direction:column; align-items:center; gap:7px;} }
+    @media (prefers-reduced-motion:reduce) { .track span {animation:none; width:100%;} }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <div class="brand" aria-label="BARÓN Cortinas a medida"><span class="brand-mark">B</span><span class="brand-name">BARÓN<i>.</i></span></div>
+      <span class="top-note">Cortinas a medida</span>
+    </header>
+    <main>
+      <span class="eyebrow">Diseño · Luz · Textura</span>
+      <h1>La luz justa.<br><em>Tu espacio perfecto.</em></h1>
+      <p class="lead">Estamos preparando tu experiencia para que puedas elegir tus cortinas y cotizarlas a medida.</p>
+      <div class="loader" role="status" aria-live="polite">
+        <div class="track" aria-hidden="true"><span></span></div>
+        <div class="status" id="status">Conectando con el cotizador…</div>
+        <div class="time" id="time">Esto puede tardar unos instantes.</div>
+      </div>
+      <div class="fallback" id="fallback">
+        <p>La conexión está tardando más de lo habitual. Seguiremos intentando automáticamente.</p>
+        <a href="https://baroncortinas.onrender.com/" rel="noopener">Abrir el cotizador directamente</a>
+      </div>
+      <noscript><p class="lead">Activá JavaScript para continuar automáticamente, o <a style="color:#f1d5ab" href="https://baroncortinas.onrender.com/">ingresá al cotizador</a>.</p></noscript>
+    </main>
+    <footer><span>BARÓN · CORTINAS A MEDIDA</span><span>Diseñadas para vos.</span></footer>
+  </div>
+  <script>
+    (() => {
+      'use strict';
+      const DESTINATION = 'https://baroncortinas.onrender.com/';
+      const status = document.getElementById('status');
+      const time = document.getElementById('time');
+      const fallback = document.getElementById('fallback');
+      const started = Date.now();
+      let finished = false;
+      let failures = 0;
+
+      function updateMessage() {
+        if (finished) return;
+        const seconds = Math.floor((Date.now() - started) / 1000);
+        if (seconds >= 90) {
+          status.textContent = 'Seguimos intentando conectar con BARÓN…';
+          time.textContent = 'La aplicación está tardando más de lo habitual.';
+          fallback.classList.add('visible');
+        } else if (seconds >= 35) {
+          status.textContent = 'El cotizador se está iniciando…';
+          time.textContent = 'Gracias por esperar. La primera visita puede demorar un poco.';
+        } else if (seconds >= 12) {
+          status.textContent = 'Preparando materiales y presupuestos…';
+          time.textContent = 'Estamos terminando de iniciar la aplicación.';
+        }
+      }
+
+      async function checkReady() {
+        if (finished) return;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 16000);
+        try {
+          const response = await fetch('/api/ready?ts=' + Date.now(), {
+            cache: 'no-store', headers: { Accept: 'application/json' }, signal: controller.signal
+          });
+          if (!response.ok) throw new Error('Error de comprobación');
+          const result = await response.json();
+          if (result.ready === true) {
+            finished = true;
+            status.textContent = '¡Todo listo! Entrando a BARÓN…';
+            time.textContent = 'Te llevamos al cotizador automáticamente.';
+            setTimeout(() => window.location.replace(DESTINATION), 650);
+            return;
+          }
+          failures = 0;
+        } catch (error) {
+          failures += 1;
+          if (failures >= 4) {
+            status.textContent = 'Estamos verificando la conexión…';
+          }
+        } finally {
+          clearTimeout(timeout);
+        }
+        updateMessage();
+        if (!finished) setTimeout(checkReady, 4500);
+      }
+
+      setInterval(updateMessage, 1000);
+      checkReady();
+    })();
+  </script>
+</body>
+</html>
