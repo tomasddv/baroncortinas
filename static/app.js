@@ -24,13 +24,31 @@
       const previous=box.querySelector('input:checked')?.value;
       box.replaceChildren();
       if(!mat)return;
+      const validPrevious=mat.colors.some(c=>c.id===previous)?previous:null;
       for(let i=0;i<mat.colors.length;i++){
         const col=mat.colors[i], lab=document.createElement('label');lab.className='color-choice';
-        const inp=document.createElement('input');inp.type='radio';inp.name='color_'+family;inp.value=col.id;inp.checked=(previous===col.id)||(!previous&&i===0);
+        const inp=document.createElement('input');inp.type='radio';inp.name='color_'+family;inp.value=col.id;inp.checked=(validPrevious===col.id)||(!validPrevious&&i===0);
         const span=document.createElement('span'), sw=document.createElement('i');sw.className='color-swatch';sw.style.backgroundColor=col.hex;
-        span.append(sw,document.createTextNode(col.name));lab.append(inp,span);box.append(lab);
+        span.append(sw);
+        if(col.photo){const img=document.createElement('img');img.className='color-thumbnail';img.loading='lazy';img.alt='';img.src='/media/'+encodeURIComponent(col.photo);span.append(img)}
+        span.append(document.createTextNode(col.name));lab.append(inp,span);box.append(lab);
       }
-      box.addEventListener('change',queueQuote,{once:true});
+      updateFabricPreview(family);
+    }
+    function updateFabricPreview(family){
+      const mat=mats.find(m=>m.id===selected('material_'+family));
+      const col=mat?.colors.find(c=>c.id===selected('color_'+family));
+      const target=$(`[data-preview-for="${family}"]`,frm);
+      if(!target)return;
+      target.replaceChildren();
+      const image=col?.photo||mat?.photo;
+      if(image){
+        const img=document.createElement('img');img.src='/media/'+encodeURIComponent(image);img.alt=`Tela ${mat.name}, color ${col?.name||''}`;img.loading='lazy';
+        const caption=document.createElement('span');caption.textContent=`Vista real: ${mat.name} · ${col?.name||''}`;
+        target.append(img,caption);
+      }else{
+        const note=document.createElement('span');note.textContent='Este color todavía no tiene una fotografía cargada.';target.append(note);
+      }
     }
     function gather(){const selections={};families.forEach(f=>{selections[f]={material_id:selected('material_'+f),color_id:selected('color_'+f)}});
       return {kind,selections,width_cm:Number($('#width_cm').value),height_cm:Number($('#height_cm').value),quantity:Number($('#quantity').value),mount:selected('mount'),drop:selected('drop'),side:selected('side'),chain:selected('chain'),pleat:selected('pleat')};}
@@ -40,7 +58,7 @@
       }catch(e){if(id!==seq)return;err.textContent=e.message;total.textContent='Sin precio';mobile.textContent='Sin precio'}}
     function queueQuote(){clearTimeout(timer);timer=setTimeout(quote,240)}
     families.forEach(f=>renderColors(f));
-    frm.addEventListener('change',ev=>{if(ev.target.name?.startsWith('material_'))renderColors(ev.target.name.replace('material_',''));queueQuote()});
+    frm.addEventListener('change',ev=>{if(ev.target.name?.startsWith('material_'))renderColors(ev.target.name.replace('material_',''));if(ev.target.name?.startsWith('color_'))updateFabricPreview(ev.target.name.replace('color_',''));queueQuote()});
     frm.addEventListener('input',queueQuote);
     $$('[data-qty]').forEach(btn=>btn.addEventListener('click',()=>{let inp=$('#quantity');inp.value=Math.max(1,Math.min(30,Number(inp.value||1)+Number(btn.dataset.qty)));queueQuote()}));
     $('#quantity').addEventListener('input',queueQuote);

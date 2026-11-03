@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% block title %}Insumos · BARÓN{% endblock %}
+{% block content %}
+<div class="shell material-editor"><div class="breadcrumbs"><a href="/admin">Administración</a><span>›</span>Insumos</div>
+<div class="editor-heading"><div><span class="eyebrow">COSTOS DE FABRICACIÓN</span><h1>Insumos y componentes</h1><p>Registrá cada pieza con su costo de compra real. No se muestra al cliente.</p></div><a class="btn btn-primary" href="/admin/componente/nuevo">+ Agregar insumo</a></div>
+<div class="admin-help">Ejemplos: tubo de aluminio, mecanismo, soporte, cadena, contrapeso, terminal, zócalo, riel o accesorios. Primero creá los insumos; después <a class="edit-link" href="/admin/recetas">asignalos a cada modelo de cortina</a>.</div>
+<div class="admin-block"><div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Insumo</th><th>Unidad de compra</th><th>Costo unitario</th><th>Estado</th><th></th></tr></thead><tbody>
+{% for c in components %}<tr><td><strong>{{c.name}}</strong></td><td>{{{'unidad':'Unidad','metro':'Metro','m2':'m²'}.get(c.unit,c.unit)}}</td><td>$ {{'{:,.2f}'.format(c.unit_cost).replace(',','X').replace('.',',').replace('X','.')}}</td><td><span class="status {{'active' if c.active else 'paused'}}">{{'Activo' if c.active else 'Pausado'}}</span></td><td><a class="edit-link" href="/admin/componente/{{c.id}}">Editar ↗</a></td></tr>
+{% else %}<tr><td colspan="5">Todavía no hay insumos. Empezá con el tubo, mecanismo y soportes de tu Roller Blackout.</td></tr>{% endfor %}
+</tbody></table></div></div><div class="editor-actions"><a class="btn btn-primary" href="/admin/recetas">Continuar a recetas de fabricación →</a><a class="btn btn-outline" href="/admin">← Panel principal</a></div>
+<p class="small-note">Almacenamiento: {{storage}}. Los costos anteriores de mecanismo siguen activos hasta que definas una receta para cada modelo.</p></div>
+{% endblock %}

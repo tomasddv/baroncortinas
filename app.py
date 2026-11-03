@@ -13,6 +13,7 @@ from flask import Flask, Response, abort, flash, jsonify, redirect, render_templ
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from storage import StorageError, load_catalog, read_image, remote_enabled, save_catalog, save_image, storage_label
+from manufacturing import bp as manufacturing_bp, calculate_hardware
 
 app = Flask(__name__)
 app.config.update(
@@ -24,6 +25,7 @@ app.config.update(
 )
 if not app.config['SECRET_KEY']:
     raise RuntimeError("En Render es obligatorio configurar SECRET_KEY")
+app.register_blueprint(manufacturing_bp)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"], salt="cotizador-presupuesto-v1")
 PRODUCTS = {
     "blackout": {"name": "Roller Blackout", "subtitle": "Oscuridad total y privacidad", "families": ["blackout"]},
@@ -115,25 +117,18 @@ def price_quote(cfg, body):
             # Traditional curtains need multiple panels if combined width exceeds roll width.
             panels = max(1, math.ceil(cut_width / float(material.get("roll_width_cm", 300))))
             billable_linear_m = max(0.5, (cut_height/100) * panels * (1 + waste_pct/100))
-            material_cost = billable_linear_m * float(material["price"])
+            material_cost = billable_linear_m * float(color.get("price_override", material["price"]))
             estimated_qty = billable_linear_m
             estimated_unit = "m lineales"
         else:
             billable_m2 = max(float(settings.get("min_billable_m2",1)), area_m2 * (1+waste_pct/100))
-            material_cost = billable_m2 * float(material["price"])
+            material_cost = billable_m2 * float(color.get("price_override", material["price"]))
             estimated_qty = billable_m2
             estimated_unit = "m²"
         fabric_cost += material_cost
         selected.append({"family":fam,"material_id":material["id"],"material":material["name"],"color_id":color["id"],"color":color["name"]})
-        consumption.append({"material":material["name"],"quantity":round(estimated_qty,3),"unit":estimated_unit,"waste_pct":waste_pct,"cut_width_cm":round(cut_width,1),"cut_height_cm":round(cut_height,1)})
-    if kind == "doble":
-        hardware = float(settings.get("double_hardware_cost",0))
-    elif kind == "tela":
-        hardware = float(settings.get("traditional_hardware_cost",0))
-    else:
-        hardware = float(settings.get("base_hardware_cost",0))
-    if kind != "tela":
-        hardware += float(chain_costs[chain])
+        consumption.append({"material":material["name"],"quantity":round(estimated_qty,3),"unit":estimated_unit,"waste_pct":waste_pct,"cut_width_cm":round(cut_width,1),"cut_height_cm":round(cut_height,1),"unit_cost":float(color.get("price_override",material["price"])),"subtotal":round(material_cost,2)})
+    hardware, component_lines, recipe_used = calculate_hardware(cfg, kind, w, h, chain, chain_costs)
     total_cost = fabric_cost + hardware
     markup = number(settings.get("markup_pct",0), "Recargo de venta", 0, 1000)
     unit_price = as_int(total_cost * (1 + markup/100))
@@ -147,7 +142,7 @@ def price_quote(cfg, body):
         "reference":uuid.uuid4().hex[:8].upper(),
         "created_at":datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
-    return result, {"cost_per_unit":round(total_cost,2),"consumption":consumption,"fabric_cost":round(fabric_cost,2),"hardware_cost":round(hardware,2)}
+    return result, {"cost_per_unit":round(total_cost,2),"consumption":consumption,"fabric_cost":round(fabric_cost,2),"hardware_cost":round(hardware,2),"components":component_lines,"recipe_used":recipe_used}
 
 
 def admin_ok():
@@ -323,6 +318,30 @@ def admin_export():
     output=json.dumps(load_catalog(),ensure_ascii=False,indent=2).encode("utf-8")
     return send_file(BytesIO(output),mimetype="application/json",as_attachment=True,download_name="catalogo-cortinas.json")
 
+@app.get("/admin/simulador")
+def admin_cost_preview():
+    cfg=load_catalog()
+    kind=request.args.get("kind", "blackout")
+    if kind not in PRODUCTS:
+        kind="blackout"
+    try:
+        width=number(request.args.get("width_cm",120), "Ancho", 30, 300)
+        height=number(request.args.get("height_cm",150), "Alto", 30, 300)
+        selections={}
+        for fam in PRODUCTS[kind]["families"]:
+            available=[m for m in cfg["materials"] if m.get("active",True) and m["family"]==fam and m.get("colors")]
+            if not available:
+                raise ValueError("No hay materiales activos para " + fam)
+            material=available[0]
+            selections[fam]={"material_id":material["id"],"color_id":material["colors"][0]["id"]}
+        quote, detail=price_quote(cfg,{"kind":kind,"width_cm":width,"height_cm":height,"quantity":1,
+            "selections":selections,"chain":"Plástica","mount":"Pared","drop":"Detrás","side":"Derecha","pleat":"Fruncida"})
+        error=None
+    except (ValueError,KeyError,TypeError,StorageError) as exc:
+        quote,detail,error=None,None,str(exc)
+    return render_template("despiece.html",models=PRODUCTS,kind=kind,width=request.args.get("width_cm",120),
+        height=request.args.get("height_cm",150),quote=quote,detail=detail,error=error)
+
 @app.post("/admin/logo")
 def upload_brand_logo():
     cfg=load_catalog()
@@ -419,6 +438,13 @@ def material_editor(material_id=None):
         if f.get("price_unit") not in ("m2","metro_lineal"):
             raise ValueError("Unidad de precio inválida")
         colors=parse_colors(f.get("colors",""))
+        # Preserve photos and individual prices when editing the list of colour names.
+        previous_colors={c["id"]:c for c in (existing or {}).get("colors", [])}
+        for color in colors:
+            previous=previous_colors.get(color["id"], {})
+            for key in ("photo", "price_override"):
+                if key in previous:
+                    color[key]=previous[key]
         material=dict(existing or {})
         material.update({"id":(existing or {}).get("id") or "mat-"+uuid.uuid4().hex[:10],
             "name":name,"family":family,"description":f.get("description","").strip()[:300],

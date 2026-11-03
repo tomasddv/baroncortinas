@@ -1,0 +1,18 @@
+{% extends 'base.html' %}{% block title %}Simulador de costos · BARÓN{% endblock %}
+{% block content %}
+<div class="shell material-editor"><div class="breadcrumbs"><a href="/admin">Administración</a><span>›</span>Simulador de costos</div>
+<div class="editor-heading"><div><span class="eyebrow">CONTROL INTERNO</span><h1>Simulador de fabricación</h1><p>Revisá costos, consumo y precio de venta para una cortina. No se muestra al cliente.</p></div><a class="btn btn-outline" href="/admin/recetas">Editar recetas</a></div>
+<form class="editor-form manufacturing-form" method="get" action="/admin/simulador"><div class="admin-field-grid">
+<label>Modelo<select name="kind">{% for code,prod in models.items() %}<option value="{{code}}" {% if kind==code %}selected{% endif %}>{{prod.name}}</option>{% endfor %}</select></label>
+<label>Ancho (cm)<input type="number" name="width_cm" min="30" max="300" step="0.5" value="{{width}}" required></label>
+<label>Alto (cm)<input type="number" name="height_cm" min="30" max="300" step="0.5" value="{{height}}" required></label></div><button class="btn btn-primary" type="submit">Recalcular →</button><p class="small-note">Para esta vista se utiliza automáticamente el primer material activo de cada familia y la cadena plástica. El cliente puede elegir otros materiales y opciones en la tienda.</p></form>
+{% if error %}<div class="inline-warning">{{error}}</div>{% elif detail %}
+<div class="admin-block"><h2>Despiece de {{quote.product}}</h2><p>{{quote.width_cm}} × {{quote.height_cm}} cm · {{'Receta detallada' if detail.recipe_used else 'Costo fijo anterior (sin receta)'}}</p>
+<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Elemento</th><th>Cantidad</th><th>Costo unitario</th><th>Subtotal</th></tr></thead><tbody>
+{% for c in detail.consumption %}<tr><td>Tela: {{c.material}}</td><td>{{c.quantity}} {{c.unit}}</td><td>$ {{'{:,.2f}'.format(c.unit_cost).replace(',','X').replace('.',',').replace('X','.')}}</td><td>$ {{'{:,.2f}'.format(c.subtotal).replace(',','X').replace('.',',').replace('X','.')}}</td></tr>{% endfor %}
+<tr><td><strong>Subtotal telas</strong></td><td></td><td></td><td><strong>$ {{'{:,.2f}'.format(detail.fabric_cost).replace(',','X').replace('.',',').replace('X','.')}}</strong></td></tr>
+{% for line in detail.components %}<tr><td>{{line.name}}<small class="recipe-meta">{{line.mode}}</small></td><td>{{line.quantity}} {{line.unit}}</td><td>$ {{'{:,.2f}'.format(line.unit_cost).replace(',','X').replace('.',',').replace('X','.')}}</td><td>$ {{'{:,.2f}'.format(line.subtotal).replace(',','X').replace('.',',').replace('X','.')}}</td></tr>{% endfor %}
+<tr><td><strong>Costo total de fabricación</strong></td><td></td><td></td><td><strong>$ {{'{:,.2f}'.format(detail.cost_per_unit).replace(',','X').replace('.',',').replace('X','.')}}</strong></td></tr>
+<tr><td><strong>Precio orientativo de venta</strong></td><td></td><td></td><td><strong>$ {{'{:,.0f}'.format(quote.unit_price).replace(',','.')}}</strong></td></tr>
+</tbody></table></div></div>{% endif %}
+</div>{% endblock %}

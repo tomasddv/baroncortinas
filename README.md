@@ -131,3 +131,27 @@ data/catalog.json       # catálogo inicial editable desde panel
 - La cotización se calcula en el servidor y cada precio se firma; al armar un pedido se verifican las firmas y se recalculan los valores con el catálogo actual.
 - Es recomendable activar MFA en GitHub y rotar los tokens si se exponen.
 - Para producción con varias personas, agregar un proveedor de autenticación, monitoreo, backups y auditoría de cambios.
+
+## Nuevo: fotos por color y despiece de fabricación
+
+En `/admin` aparecen tres accesos adicionales:
+
+1. **Insumos y precios** (`/admin/componentes`): cargar nombre, unidad de compra (unidad, metro o m²), costo de compra y estado activo.
+2. **Recetas por modelo** (`/admin/recetas`): seleccionar los insumos de cada tipo de cortina, la regla de consumo, un factor y la merma particular de cada componente. Hay recetas independientes para Blackout, Sun Screen, Doble y cortina de tela.
+3. **Simulador** (`/admin/simulador`): revisar el despiece para un ancho y alto determinados, el subtotal de telas, componentes y el precio orientativo final. La vista toma el primer material activo de cada familia, solo como referencia de control.
+
+En **Editar material** (`/admin/material/<id>`) aparece una sección **Fotografías por color**. Después de guardar el nombre y HEX de un color, se puede subir su foto JPG/PNG/WEBP (máximo 1,5 MB), borrar la anterior o definir un costo particular de esa variante. El cliente verá la foto de la variante elegida en el configurador; si no existe, se utiliza la foto general del material. Al editar la lista de colores se conservan las fotos y costos de colores cuyos nombres/IDs no cambiaron.
+
+### Reglas de consumo
+
+- `fijo`: cantidad fija de unidades por cortina, multiplicada por el factor.
+- `ancho_m`: ancho solicitado en metros × factor.
+- `alto_m`: alto solicitado en metros × factor.
+- `perimetro_m`: dos veces la suma de ancho y alto, en metros × factor.
+- `area_m2`: superficie solicitada en m² × factor.
+- `cada_50cm_ancho` y `cada_100cm_ancho`: cantidad de tramos de ancho redondeada hacia arriba × factor.
+- La merma específica del insumo incrementa la cantidad. Para insumos comprados por `unidad`, la cantidad resultante se redondea hacia arriba.
+
+**Compatibilidad:** hasta configurar una receta no vacía, el cotizador conserva el costo fijo de mecanismos anterior de ese modelo. Una receta activa **reemplaza** ese costo fijo para evitar sumarlo dos veces. El adicional por cadena de la configuración anterior continúa aplicándose por separado en cortinas roller, por lo que no debe duplicarse en la receta. El costo de la tela ya se calcula desde el material y no debe cargarse nuevamente como componente. El recargo comercial se aplica al total de telas más componentes.
+
+**Persistencia en Render:** las fotos, precios y recetas necesitan `GITHUB_REPO` y `GITHUB_TOKEN` (Contents: read/write) configurados como variables de entorno del servicio; `SECRET_KEY` por sí sola solo permite iniciar la aplicación. Las claves nunca se cargan en el repositorio.

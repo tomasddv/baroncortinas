@@ -14,7 +14,7 @@
     {% for m in options %}<label class="material-option"><input type="radio" name="material_{{family}}" value="{{m.id}}" {% if loop.first %}checked{% endif %}><span class="material-option-inner">
       {% if m.photo %}<img loading="lazy" src="/media/{{m.photo}}" alt="Foto de {{m.name}}">{% else %}<span class="fabric-sample {{family}}"></span>{% endif %}
       <span class="material-name">{{m.name}}</span><span class="material-desc">{{m.description}}</span><span class="check-icon">✓</span></span></label>{% endfor %}</div>
-    <div class="color-box"><h3>Color del material</h3><div class="color-choices" data-color-for="{{family}}"></div></div>
+    <div class="color-box"><h3>Color del material</h3><div class="color-choices" data-color-for="{{family}}"></div><div class="selected-fabric-preview" data-preview-for="{{family}}" aria-live="polite"></div></div>
     {% else %}<p class="inline-warning">No hay materiales disponibles en esta categoría. Agregalos desde administración.</p>{% endif %}
   </section>
   {% endfor %}

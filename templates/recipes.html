@@ -1,0 +1,18 @@
+{% extends 'base.html' %}{% block title %}Recetas de fabricación · BARÓN{% endblock %}
+{% block content %}
+<div class="shell material-editor"><div class="breadcrumbs"><a href="/admin">Administración</a><span>›</span>Recetas de fabricación</div>
+<div class="editor-heading"><div><span class="eyebrow">DESPIECE POR MODELO</span><h1>Construcción de cada cortina</h1><p>Definí qué insumos lleva cada modelo, cuántos y cómo varían con las medidas.</p></div><a class="btn btn-outline" href="/admin/componentes">Editar costos de insumos</a></div>
+<div class="admin-help"><strong>Importante:</strong> cuando guardes una receta con al menos un insumo, reemplazará el costo fijo de mecanismo de ese modelo. El adicional por tipo de cadena sigue calculándose por separado desde <a href="/admin#fabricacion">Costos y fabricación</a>. Las telas ya se calculan por superficie o metros lineales, por lo que no debés agregarlas nuevamente como insumos.</div>
+{% if not components %}<div class="inline-warning">Primero cargá y activá al menos un insumo en <a href="/admin/componentes">Insumos</a>.</div>{% endif %}
+{% for kind,label in models.items() %}
+<section class="admin-block" id="{{kind}}"><div class="admin-block-header"><div><span class="eyebrow">MODELO {{loop.index}} / 4</span><h2>{{label}}</h2><p>{% if recipes.get(kind) %}Receta activa: {{recipes[kind]|length}} componentes.{% else %}Usando costo fijo anterior hasta que guardes una receta.{% endif %}</p></div></div>
+<form method="post" action="/admin/recetas/{{kind}}"><input type="hidden" name="csrf" value="{{csrf_token()}}"><div class="admin-table-wrap"><table class="admin-table recipe-table"><thead><tr><th>Usar</th><th>Insumo</th><th>Regla de consumo</th><th>Factor / cantidad</th><th>Merma (%)</th></tr></thead><tbody>
+{% for c in components %}{% set ns=namespace(row=none) %}{% for r in recipes.get(kind,[]) %}{% if r.component_id==c.id %}{% set ns.row=r %}{% endif %}{% endfor %}
+<tr><td><input type="checkbox" name="use_{{c.id}}" {% if ns.row %}checked{% endif %} aria-label="Incluir {{c.name}}"></td><td><strong>{{c.name}}</strong><small class="recipe-meta">$ {{'{:,.0f}'.format(c.unit_cost).replace(',','.')}} / {{c.unit}}</small></td>
+<td><select name="mode_{{c.id}}" aria-label="Regla de {{c.name}}">{% for mode,title in modes.items() %}<option value="{{mode}}" {% if ns.row and ns.row.mode==mode %}selected{% endif %}>{{title}}</option>{% endfor %}</select></td>
+<td><input type="number" name="factor_{{c.id}}" min="0.001" max="100000" step="0.001" value="{{ns.row.factor if ns.row else 1}}" aria-label="Cantidad de {{c.name}}"></td>
+<td><input type="number" name="waste_{{c.id}}" min="0" max="80" step="0.1" value="{{ns.row.waste_pct if ns.row else 0}}" aria-label="Merma de {{c.name}}"></td></tr>{% endfor %}
+</tbody></table></div><p class="small-note">Cantidad fija = factor por cortina. Por ancho/alto = metros × factor. Los insumos en unidades se redondean hacia arriba.</p><button class="btn btn-primary" type="submit" {% if not components %}disabled{% endif %}>Guardar receta {{label}} →</button></form>
+</section>{% endfor %}
+<div class="editor-actions"><a class="btn btn-primary" href="/admin/simulador">Ver simulador de costos →</a><a class="btn btn-outline" href="/admin">← Panel principal</a></div>
+</div>{% endblock %}

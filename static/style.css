@@ -18,3 +18,25 @@
 .logo-type{font-weight:600;letter-spacing:.15em}
 .hero h1 em{color:#cbb69e}
 @media(max-width:760px){.identity-layout{grid-template-columns:1fr}.identity-wordmark{font-size:2.8rem}.identity-upload .btn{width:100%}}
+
+/* BARÓN · Fotografías por variante y recetas de fabricación */
+.manufacturing-links{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.manufacturing-link{display:flex;flex-direction:column;gap:8px;border:1px solid var(--stroke);border-radius:14px;padding:20px;background:var(--ivory);font-size:.84rem}
+.manufacturing-link strong{color:var(--forest);font-size:1rem}.manufacturing-link span{color:var(--muted);flex:1}.manufacturing-link b{color:var(--forest)}
+.manufacturing-form{max-width:900px;margin-top:22px}.manufacturing-form label{font-size:.8rem;font-weight:700}
+.manufacturing-form input,.manufacturing-form select{display:block;width:100%;padding:10px;margin-top:7px;border:1px solid var(--stroke);border-radius:8px}
+.manufacturing-form input[type=checkbox]{width:auto;display:inline-block}
+.recipe-table{min-width:820px}.recipe-table select,.recipe-table input[type=number]{width:100%;max-width:300px;padding:9px;border:1px solid var(--stroke);border-radius:8px;background:white}
+.recipe-table input[type=checkbox]{width:20px;height:20px;accent-color:var(--forest)}
+.recipe-table input[type=number]{max-width:120px}.recipe-meta{display:block;font-size:.68rem;color:var(--muted);margin-top:4px}
+.variant-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.variant-card{border:1px solid var(--stroke);border-radius:14px;padding:15px;display:flex;flex-direction:column;gap:10px;background:var(--ivory)}
+.variant-card strong{font-size:1rem}.variant-card small{color:var(--muted);font-size:.75rem}
+.variant-card label{font-size:.75rem;font-weight:700}.variant-card input[type=file],.variant-card input[type=number]{width:100%;padding:9px;margin-top:5px;border:1px solid var(--stroke);border-radius:8px;background:white}
+.variant-card .variant-remove{display:flex;align-items:center;gap:7px;font-weight:400}.variant-card .variant-remove input{margin:0}
+.variant-photo{height:150px;background:#ece9e3;border-radius:10px;overflow:hidden;display:grid;place-items:center}
+.variant-photo img{height:100%;width:100%;object-fit:cover}.variant-swatch{width:100%;height:100%}
+.color-thumbnail{width:30px;height:30px;object-fit:cover;border-radius:5px;border:1px solid #ddd}
+.selected-fabric-preview{margin-top:13px;display:flex;align-items:center;gap:13px;color:var(--muted);font-size:.76rem}
+.selected-fabric-preview img{height:110px;width:125px;object-fit:cover;border-radius:11px;border:1px solid var(--stroke)}
+@media(max-width:760px){.manufacturing-links{grid-template-columns:1fr}.variant-grid{grid-template-columns:1fr}.recipe-table{min-width:750px}}
