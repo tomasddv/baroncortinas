@@ -160,7 +160,7 @@
     {
       "id": "ins-188e241e0fc6",
       "name": "tubo de cortina redondo",
-      "unit": "unidad",
+      "unit": "metro",
       "unit_cost": 2000.0,
       "active": true
     }
