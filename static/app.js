@@ -55,7 +55,7 @@
       return {kind,selections,width_cm:Number($('#width_cm').value),height_cm:Number($('#height_cm').value),quantity:Number($('#quantity').value),mount:selected('mount'),drop:selected('drop'),side:selected('side'),chain:selected('chain'),pleat:selected('pleat')};}
     async function quote(){const id=++seq;latestQuote=null;add.disabled=true;err.textContent='';total.textContent='Calculando…';mobile.textContent='Calculando…';
       if(!$('#width_cm').checkValidity()||!$('#height_cm').checkValidity()){total.textContent='Revisá las medidas';mobile.textContent='Revisá las medidas';return}
-      try{const r=await fetch('/api/cotizar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(gather())});let v=await r.json();if(id!==seq)return;if(!r.ok)throw Error(v.error||'No se pudo cotizar');latestQuote=v;total.textContent=money(v.total);mobile.textContent=money(v.total);$('#quote-description').textContent=v.width_cm+' × '+v.height_cm+' cm · '+v.selections.map(x=>x.material+' / '+x.color).join(' · ');add.disabled=false;
+      try{const r=await fetch('/api/cotizar',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content},body:JSON.stringify(gather())});let v=await r.json();if(id!==seq)return;if(!r.ok)throw Error(v.error||'No se pudo cotizar');latestQuote=v;total.textContent=money(v.total);mobile.textContent=money(v.total);$('#quote-description').textContent=v.width_cm+' × '+v.height_cm+' cm · '+v.selections.map(x=>x.material+' / '+x.color).join(' · ');add.disabled=false;
       }catch(e){if(id!==seq)return;err.textContent=e.message;total.textContent='Sin precio';mobile.textContent='Sin precio'}}
     function queueQuote(){clearTimeout(timer);timer=setTimeout(quote,240)}
     families.forEach(f=>renderColors(f));
@@ -115,7 +115,7 @@
       if(!name||!city){error.textContent='Completá tu nombre y localidad.';return}
       error.textContent='Preparando tu pedido…';
       try{
-        const res=await fetch('/api/armar-pedido',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,city,tokens:cart.map(x=>x.token)})});
+        const res=await fetch('/api/armar-pedido',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':document.querySelector('meta[name=csrf-token]').content},body:JSON.stringify({name,city,tokens:cart.map(x=>x.token)})});
         const out=await res.json();if(!res.ok)throw Error(out.error||'No fue posible preparar tu pedido');
         error.textContent='';window.open(out.url,'_blank','noopener,noreferrer');
       }catch(e){error.textContent=e.message||'Revisá los datos y probá nuevamente'}

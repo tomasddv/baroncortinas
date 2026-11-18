@@ -18,6 +18,11 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         sync: false
+      # PostgreSQL privado; nunca guardar pedidos o datos personales en GitHub.
+      - key: DATABASE_URL
+        sync: false
+      - key: STAFF_USERS_JSON
+        sync: false
       - key: GITHUB_REPO
         sync: false
       - key: GITHUB_TOKEN
