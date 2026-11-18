@@ -43,11 +43,16 @@ with sync_playwright() as p:
     page.locator('.unit').nth(1).locator('select').select_option('beige')
     page.locator('input[name=customer]').fill('Cliente de prueba')
     page.locator('input[name=city]').fill('Trelew')
+    page.get_by_label('Mentirita',exact=True).check()
     page.get_by_role('button',name='Calcular',exact=True).click()
     page.wait_for_selector('#totals .total')
     page.screenshot(path=str(OUT/'cotizador-mobile-variante-color.png'),full_page=True)
     page.get_by_role('button',name='Guardar presupuesto',exact=True).click()
     page.locator('#order-title').filter(has_text='BAR-').wait_for()
+    page.locator('#price-choice-dialog').wait_for()
+    page.screenshot(path=str(OUT/'eleccion-caritas.png'),full_page=True)
+    page.locator('#choose-normal').click()
+    page.locator('#price-choice-dialog').wait_for(state='hidden')
     assert page.locator('body').evaluate('(e)=>e.scrollWidth <= innerWidth')
     page.get_by_role('button',name='Despiece',exact=True).click()
     assert not page.locator('#find-remnants').is_checked()
@@ -68,6 +73,8 @@ with sync_playwright() as p:
     page.screenshot(path=str(OUT/'despiece-mobile.png'),full_page=True)
     page.get_by_role('button',name='Presupuesto cliente',exact=True).click()
     assert page.locator('#client-preview .client-row').count()==2
+    assert '10 cm de margen' in page.locator('#client-preview').inner_text()
+    assert '160 cm' in page.locator('#client-preview').inner_text()
     page.screenshot(path=str(OUT/'presupuesto-mobile.png'),full_page=True)
     page.set_viewport_size({'width':1440,'height':1000})
     page.get_by_role('button',name='Despiece',exact=True).click()
@@ -78,6 +85,23 @@ with sync_playwright() as p:
     page.locator('#status-select').select_option('aprobado')
     page.get_by_role('button',name='Confirmar estado',exact=True).click()
     page.locator('#order-status').filter(has_text='aprobado').wait_for()
+    assert page.locator('#change-status').is_disabled()
+    original_id=saved_bom.value.json()['order']['id']
+    csrf=page.locator('meta[name="csrf-token"]').get_attribute('content')
+    extra_body={'customer':'Segundo aprobado','groups':saved_bom.value.json()['order']['groups']}
+    extra=page.request.post(BASE+'/admin/interno/api/orders',data=extra_body,headers={'X-CSRF-Token':csrf}).json()['order']
+    approved=page.request.post(BASE+'/admin/interno/api/orders/'+extra['id']+'/status',data={'status':'aprobado','revision':extra['revision'],'confirm':True},headers={'X-CSRF-Token':csrf})
+    assert approved.status==200
+    page.get_by_role('button',name='Despiece',exact=True).click()
+    page.locator('#bom-order-select option').filter(has_text='Segundo aprobado').wait_for(state='attached')
+    assert page.locator('#bom-order-select option').count()==3
+    page.locator('#bom-order-select').select_option(extra['id'])
+    page.locator('#bom-content h3').first.filter(has_text='Segundo aprobado').wait_for()
+    assert page.locator('#save-bom').is_disabled()
+    page.screenshot(path=str(OUT/'despiece-aprobados.png'),full_page=True)
+    page.locator('#bom-order-select').select_option(original_id)
+    page.locator('#bom-content h3').first.filter(has_text='Cliente de prueba').wait_for()
+    page.get_by_role('button',name='Cotizador',exact=True).click()
     page.locator('#status-select').select_option('presupuesto')
     page.get_by_role('button',name='Confirmar estado',exact=True).click()
     page.locator('#order-status').filter(has_text='presupuesto').wait_for()
@@ -132,6 +156,24 @@ with sync_playwright() as p:
     assert page.locator('.unit').count()==0
     page.get_by_label('Personalizar unidades de este grupo').uncheck()
     assert page.locator('.attributes').count()==0
+    # Resaving with the happy choice must never multiply the previous uplift.
+    for choice in ['happy','happy','normal']:
+        page.get_by_role('button',name='Guardar presupuesto',exact=True).click()
+        page.locator('#price-choice-dialog').wait_for()
+        page.locator('#choose-'+choice).click()
+        page.locator('#price-choice-dialog').wait_for(state='hidden')
+        stored_choice=page.request.get(BASE+'/admin/interno/api/orders/'+original_id).json()['order']
+        if choice=='happy':
+            assert stored_choice['happy_adjustment_pct']==10
+            if 'previous_happy' in locals():assert previous_happy==stored_choice['total']
+            previous_happy=stored_choice['total']
+        else:
+            assert stored_choice['happy_adjustment_pct']==0 and stored_choice['total']==stored_choice['normal_total']
+    page.set_viewport_size({'width':390,'height':844})
+    page.locator('#add-group').click()
+    assert page.locator('.group').count()==2
+    page.locator('#add-group').scroll_into_view_if_needed()
+    assert page.locator('#add-group').bounding_box()['y']>=page.locator('.group').last.bounding_box()['y']+page.locator('.group').last.bounding_box()['height']
     assert errors==[],errors
     print('PASS: mobile/desktop; no horizontal overflow; variants A/B/C; confirmations; separate BOM; no JavaScript errors')
     browser.close()

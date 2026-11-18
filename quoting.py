@@ -54,6 +54,7 @@ def defaults(catalog):
         '58': {'extra_cm': 40, 'price_m': 62900, 'system_price': 42000}},
         'guides_price_m': 25000, 'min_billable_m2': 0, 'min_linear_m': 0,
         'width_reduction_cm': 0, 'stock_min_m': 5, 'markup_pct': 0, 'tax_pct': 0,
+        'happy_markup_pct': 10,
         'payments': {'Transferencia': 0, 'Efectivo': 0, 'Tarjeta': 0},
         'extras': {'zocalo': {}, 'chain': {}, 'mount': {}},
         'brand': deepcopy(catalog['settings']), 'confirmed': False,
@@ -63,6 +64,7 @@ def defaults(catalog):
 def validate_config(cfg):
     if not isinstance(cfg, dict) or set(cfg.get('tubes', {})) != {'32','42','45','58'}:
         raise ValueError('Configuración de caños incompleta')
+    cfg['happy_markup_pct']=num(cfg.get('happy_markup_pct',10),'Ajuste de carita feliz %',0,1000)
     for tube in cfg['tubes'].values():
         for k in ('extra_cm', 'price_m', 'system_price'):
             tube[k] = num(tube[k], k, 0, 1e8)
@@ -211,6 +213,8 @@ def quote_order(body, cfg):
     subtotal = money(sum(u['subtotal'] for u in units))
     total = money(subtotal*(1-discount/100))
     return dict(groups=groups,units=units,bom=bom,subtotal=subtotal,total=total,discount_pct=discount,
+        mentirita=body.get('mentirita') is True,price_choice='normal',happy_adjustment_pct=0,
+        happy_rate_snapshot=cfg.get('happy_markup_pct',10),normal_total=total,
         payments={k:money(total*(1+v/100)) for k,v in cfg['payments'].items()},
         customer=text(body.get('customer',''),150),city=text(body.get('city',''),150),
         date=text(body.get('date',''),10),valid_until=text(body.get('valid_until',''),10),
@@ -223,11 +227,37 @@ def commercial_rows(order):
         key = tuple(str(u.get(k,'')) for k in ('room','detail','width_cm','height_cm','material','color','unit_price','zocalo','chain','mount','guides'))
         if key not in rows:
             rows[key] = {k:u[k] for k in COLUMNS}
+            if order.get('mentirita'):
+                rows[key]['width_cm']+=10
+                rows[key]['height_cm']+=10
             rows[key]['quantity'] = 0
             rows[key]['subtotal'] = 0
         rows[key]['quantity'] += 1
         rows[key]['subtotal'] = money(rows[key]['subtotal']+u['unit_price'])
     return list(rows.values())
+
+
+def client_measurement_note(order):
+    return ('Medidas de referencia: incluyen 10 cm de margen en ancho y alto. '
+            'Las medidas técnicas de fabricación se mantienen sin ese margen.') if order.get('mentirita') else ''
+
+
+def apply_price_choice(order,choice):
+    """Always recalculate from the normal unit prices; never compound an uplift."""
+    if choice not in ('happy','normal'):
+        raise ValueError('Elegí carita feliz o precio normal')
+    pct=num(order.get('happy_rate_snapshot',10),'Ajuste de carita feliz %',0,1000) if choice=='happy' else 0
+    for unit in order['units']:
+        base=unit.setdefault('normal_unit_price',unit['unit_price'])
+        unit['unit_price']=money(base*(1+pct/100))
+        unit['subtotal']=unit['unit_price']
+    factor=1-order['discount_pct']/100
+    order['normal_total']=money(sum(u['normal_unit_price'] for u in order['units'])*factor)
+    order['subtotal']=money(sum(u['unit_price'] for u in order['units']))
+    order['total']=money(order['subtotal']*factor)
+    order['payments']={name:money(order['total']*(1+rate/100)) for name,rate in order['price_snapshot']['payments'].items()}
+    order['price_choice']=choice
+    order['happy_adjustment_pct']=pct
 
 
 def audit(state, action, actor, **details):

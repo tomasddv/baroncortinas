@@ -20,3 +20,8 @@
 .settings-item>button,.settings-section>button{margin-top:14px}
 #settings-save-status{align-self:center;font-size:.85rem;color:#53677d}
 input[readonly]{background:#f0f3f7;color:#53677d}
+
+.commercial-toggle{background:#fff4dc;padding:10px 14px;border-radius:8px;flex-wrap:wrap}.commercial-toggle small{font-weight:400;color:#705429}
+dialog{border:1px solid #dce4ed;border-radius:16px;padding:26px;max-width:560px;width:calc(100% - 28px);color:#172b43;box-shadow:0 16px 80px #102a4840}dialog::backdrop{background:#14294488}
+.price-choice-options{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}.price-choice-option{flex-direction:column;padding:20px 12px}.face{font-size:3rem;line-height:1.2}#price-choice-error{color:#a92d35}#status-explanation{font-size:.85rem}
+#bom-order-select,#bom-order-search{margin-bottom:14px}@media(max-width:450px){dialog{padding:20px}.price-choice-options{gap:10px}.price-choice-option{padding:16px 8px;font-size:.88rem}}

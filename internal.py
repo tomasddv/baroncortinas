@@ -8,7 +8,7 @@ from flask import Blueprint, abort, jsonify, render_template, request, send_file
 from private_store import transaction
 from storage import load_catalog
 from quoting import (COLUMNS, defaults, validate_config, quote_order, commercial_rows,
-    num, text, money, now, audit, available, matches, stock_warnings, transition)
+    num, text, money, now, audit, available, matches, stock_warnings, transition, apply_price_choice)
 
 bp = Blueprint('internal',__name__,url_prefix='/admin/interno')
 
@@ -25,6 +25,7 @@ def owner():
 def config(state):
     if state['config'] is None:
         state['config'] = defaults(load_catalog())
+    state['config'].setdefault('happy_markup_pct',10)
     return state['config']
 
 
@@ -75,6 +76,9 @@ def preview():
         old=order_in(state,data['id']) if data.get('id') else None
         same=old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct']
         order = quote_order(data,old['price_snapshot'] if same and not data.get('reprice') else cfg)
+        if old:
+            order['happy_rate_snapshot']=old.get('happy_rate_snapshot',cfg['happy_markup_pct']) if not data.get('reprice') else cfg['happy_markup_pct']
+            apply_price_choice(order,old.get('price_choice','normal'))
         return jsonify(order=order,rows=commercial_rows(order),warnings=stock_warnings(state,order,cfg))
 
 
@@ -96,6 +100,11 @@ def save_order():
                 order[key]=text(data.get(key,''),limit)
         else:
             order = quote_order(data,cfg)
+            if old:
+                order['happy_rate_snapshot']=old.get('happy_rate_snapshot',cfg['happy_markup_pct']) if not data.get('reprice') else cfg['happy_markup_pct']
+                apply_price_choice(order,old.get('price_choice','normal'))
+        order['mentirita']=data.get('mentirita') is True
+        order.setdefault('happy_rate_snapshot',cfg['happy_markup_pct'])
         if not order['customer']:
             raise ValueError('Ingresá el cliente')
         if not old:
@@ -116,6 +125,27 @@ def get_order(ident):
         return jsonify(order=order,rows=commercial_rows(order),warnings=stock_warnings(state,order,config(state)),
                        audit=[a for a in state['audit'] if a.get('order_id')==ident],
                        reservations=[r for r in state['reservations'] if r['order_id']==ident])
+
+
+@bp.post('/api/orders/<ident>/price-choice')
+def price_choice(ident):
+    data=body()
+    with transaction() as state:
+        order=order_in(state,ident,data.get('revision',-1))
+        if order['status']!='presupuesto':
+            raise ValueError('Volvé a Presupuesto antes de modificar el precio')
+        choice=data.get('choice')
+        if choice not in ('happy','normal'):
+            raise ValueError('Elegí carita feliz o precio normal')
+        if choice==order.get('price_choice','normal'):
+            return jsonify(order=order,rows=commercial_rows(order),warnings=[],unchanged=True)
+        before=deepcopy(order)
+        order.setdefault('happy_rate_snapshot',config(state)['happy_markup_pct'])
+        apply_price_choice(order,choice)
+        order['revision']+=1
+        order['updated_at']=now()
+        audit(state,'ajuste comercial',actor(),order_id=ident,before=before,choice=choice,after=order)
+        return jsonify(order=order,rows=commercial_rows(order),warnings=[],unchanged=False)
 
 
 @bp.post('/api/orders/<ident>/duplicate')
@@ -141,8 +171,9 @@ def status(ident):
         raise ValueError('Confirmá el cambio de estado y sus movimientos de stock')
     with transaction() as state:
         order=order_in(state,ident,data.get('revision',-1))
+        unchanged=order['status']==data.get('status')
         transition(state,order,data.get('status'),actor())
-        return jsonify(order=order,rows=commercial_rows(order),warnings=[])
+        return jsonify(order=order,rows=commercial_rows(order),warnings=[],unchanged=unchanged)
 
 
 @bp.post('/api/orders/<ident>/bom')

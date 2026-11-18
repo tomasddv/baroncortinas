@@ -10,7 +10,7 @@ function renderSettings(){
  root.replaceChildren();const cfg=settingsDraft;
  function section(title,description,open=false){const details=el('details',{class:'card settings-section',open},[el('summary',{text:title}),el('p',{text:description})]);root.append(details);return details;}
  const general=section('Precios y formas de pago','Importes en pesos argentinos. Los ajustes de pago se expresan como porcentaje.',true),grid=el('div',{class:'grid'});
- for(const [key,label]of [['markup_pct','Recargo comercial %'],['tax_pct','Impuestos %']])grid.append(configField(label,cfg,key,'number',null,{max:1000,required:true}));
+ for(const [key,label]of [['markup_pct','Recargo comercial %'],['tax_pct','Impuestos %'],['happy_markup_pct','Aumento con carita feliz %']])grid.append(configField(label,cfg,key,'number',null,{max:1000,required:true}));
  for(const name of ['Transferencia','Efectivo','Tarjeta'])grid.append(configField(name+' ajuste %',cfg.payments,name,'number',null,{min:-100,max:1000,required:true}));
  grid.append(check('Reglas comerciales revisadas por el dueño',cfg.confirmed,c=>{cfg.confirmed=c.checked;settingsChanged();}));general.append(grid);
  const rules=section('Medidas, consumo y stock','Las medidas de corte se calculan a partir de las medidas solicitadas y estas reglas.'),rulesGrid=el('div',{class:'grid'});

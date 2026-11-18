@@ -1,5 +1,28 @@
 # Cotizador interno BARÓN
 
+## Selección de aprobados y presentación comercial
+
+Despiece muestra un listado buscable de todos los presupuestos aprobados y
+permite seleccionar cuál consultar, sin crear nuevas reservas. Un pedido ya
+aprobado muestra esa condición y no permite reconfirmar el mismo estado. Las
+consultas son de solo lectura mientras hay reservas; para editar se vuelve a
+Presupuesto. El borrador que está en edición también puede preparar su despiece.
+
+El tilde «Mentirita» agrega 10 cm al ancho y alto solo en filas comerciales del
+presupuesto cliente (vista, PDF, imagen y XLSX), con una nota explícita de margen
+de referencia. No altera medidas ingresadas, precio por área, corte, despiece,
+reservas ni consumo. La preferencia se guarda por presupuesto.
+
+Al guardar aparece un diálogo 😊/😢. La feliz aplica el porcentaje de venta
+configurado (inicialmente 10%); la triste conserva/restaura el precio normal.
+Se recalculan precios unitarios, total y medios de pago desde los importes base:
+repetir la feliz no acumula el incremento. El porcentaje se guarda con el pedido
+y se informa como ajuste comercial incluido en la salida del cliente. Los
+pedidos aprobados requieren volver a Presupuesto antes de cambiar su precio.
+
+«Agregar grupo» está debajo del último grupo y lleva al inicio del nuevo grupo
+al agregarlo, para facilitar la carga en celular.
+
 Configuración se edita mediante formularios: precios y pagos, medidas y stock,
 caños/sistemas, telas y colores, adicionales y datos del comercio. No se expone
 un editor JSON. Los identificadores, fotos y metadatos existentes se preservan;

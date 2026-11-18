@@ -10,7 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
 from reportlab.lib.utils import ImageReader
-from quoting import COLUMNS, commercial_rows
+from quoting import COLUMNS, commercial_rows, client_measurement_note
 from storage import read_image
 
 BLUE='#244574'
@@ -32,7 +32,7 @@ def xlsx(order,columns,bom=False,reservations=()):
     sheet.append([order['price_snapshot']['brand'].get('brand','BARÓN'),order['number']])
     sheet.append(['Cliente',safe(order['customer']),'Localidad',safe(order['city'])])
     sheet.append(['Fecha',order['date'],'Vigencia',order['valid_until']])
-    sheet.append([])
+    sheet.append(['Medidas',client_measurement_note(order)] if not bom and order.get('mentirita') else [])
     if bom:
         keys=['curtain','name','quantity','unit','unit_cost','subtotal','cut_width_cm','cut_height_cm','billable_quantity','price_unit','remnant_id']
         sheet.append(['Cortina','Material','Cantidad física','Unidad','Costo unitario','Subtotal costo','Ancho corte cm','Alto corte cm','Cantidad facturable','Unidad precio','Retazo elegido'])
@@ -59,6 +59,8 @@ def xlsx(order,columns,bom=False,reservations=()):
         sheet.append([])
         sheet.append(['Subtotal',order['subtotal']])
         sheet.append(['Descuento %',order['discount_pct']])
+        if order.get('happy_adjustment_pct'):
+            sheet.append(['Ajuste comercial incluido %',order['happy_adjustment_pct']])
         sheet.append(['Total',order['total']])
         for k,v in order['payments'].items():
             sheet.append([k,v])
@@ -129,6 +131,8 @@ def pdf(order,columns):
         return Paragraph(escape(str(value)).replace('\n','<br/>'),sty)
     story=[para(order['number'],heading),para('Fecha: '+order['date']+' · Válido hasta: '+order['valid_until']),
            para('Cliente: '+order['customer']+' · '+order['city']),Spacer(1,18)]
+    if order.get('mentirita'):
+        story.extend([para(client_measurement_note(order)),Spacer(1,10)])
     data=[[para(COLUMNS[k]+(' cm' if k.endswith('_cm') else ''),white) for k in columns]]
     for row in commercial_rows(order):
         data.append([para(currency(row[k]) if k in ('unit_price','subtotal') else row[k]) for k in columns])
@@ -138,6 +142,8 @@ def pdf(order,columns):
     table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(BLUE)),('VALIGN',(0,0),(-1,-1),'TOP'),
         ('GRID',(0,0),(-1,-1),.4,colors.HexColor('#cbd4de')),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]))
     story.extend([table,Spacer(1,18),para(f'Subtotal: $ {currency(order["subtotal"])} · Descuento: {order["discount_pct"]:g}%')])
+    if order.get('happy_adjustment_pct'):
+        story.append(para(f'Ajuste comercial incluido: {order["happy_adjustment_pct"]:g}%'))
     for name,value in order['payments'].items():
         story.append(para(f'{name}: $ {currency(value)}',heading))
     if order['notes']:

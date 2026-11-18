@@ -239,6 +239,69 @@ def test_stale_stock_adjustment_cannot_override_reservation(client):
     with transaction() as s: assert s['lots'][lot['id']]['length_m']==50
 
 
+def test_margin_changes_only_client_dimensions_and_exports(client):
+    body=draft(1);body['mentirita']=True
+    o=save(client,body)
+    regular=quote_order(draft(1),defaults(load_catalog()))
+    assert o['total']==regular['total']
+    assert o['units'][0]['width_cm']==150 and o['units'][0]['height_cm']==180
+    assert o['bom'][0]['cut_width_cm']==150 and o['bom'][0]['cut_height_cm']==200
+    row=commercial_rows(o)[0]
+    assert row['width_cm']==160 and row['height_cm']==190
+    prefix='/admin/interno/api/orders/'+o['id']+'/export/'
+    commercial=load_workbook(BytesIO(client.get(prefix+'xlsx').data)).active
+    assert commercial['D6'].value==160 and commercial['E6'].value==190
+    assert 'margen' in commercial['B4'].value
+    technical=load_workbook(BytesIO(client.get(prefix+'bom').data))
+    assert technical['Cortinas']['E2'].value==150 and technical['Cortinas']['F2'].value==180
+    document=''.join(p.extract_text() for p in PdfReader(BytesIO(client.get(prefix+'pdf').data)).pages)
+    assert '10 cm de margen' in document
+
+
+def test_happy_choice_is_reversible_idempotent_and_preserves_stock(client):
+    post(client,'/lots',dict(kind='rollo',material_id='excel-screen',color_id='blanco'))
+    o=save(client);base=o['total'];original_bom=deepcopy(o['bom'])
+    def choose(choice,order):
+        r=post(client,'/orders/'+order['id']+'/price-choice',dict(choice=choice,revision=order['revision']))
+        assert r.status_code==200,r.data
+        return r.json
+    result=choose('happy',o);happy=result['order']
+    assert happy['total']==base*1.1 and happy['happy_adjustment_pct']==10
+    assert happy['bom']==original_bom
+    repeated=choose('happy',happy)
+    assert repeated['unchanged'] and repeated['order']['total']==happy['total']
+    assert repeated['order']['revision']==happy['revision']
+    saved=post(client,'/orders',dict(draft(),id=happy['id'],revision=happy['revision'])).json['order']
+    assert choose('happy',saved)['order']['total']==happy['total']
+    normal=choose('normal',saved)['order']
+    assert normal['total']==base
+    assert all(u['unit_price']==u['normal_unit_price'] for u in normal['units'])
+    with transaction() as s:
+        assert not s['reservations']
+        assert all(l['length_m']==50 for l in s['lots'].values())
+    approved=post(client,'/orders/'+normal['id']+'/status',dict(status='aprobado',revision=normal['revision'],confirm=True)).json['order']
+    with transaction() as s:count=len(s['reservations'])
+    repeated_status=post(client,'/orders/'+normal['id']+'/status',dict(status='aprobado',revision=approved['revision'],confirm=True))
+    assert repeated_status.json['unchanged']
+    with transaction() as s:assert len(s['reservations'])==count
+    assert post(client,'/orders/'+normal['id']+'/price-choice',dict(choice='happy',revision=approved['revision'])).status_code==400
+
+
+def test_happy_rate_is_configurable_and_historical(client):
+    old=save(client,draft(1))
+    cfg=client.get('/admin/interno/api/state').json['config']
+    changed=deepcopy(cfg);changed['happy_markup_pct']=17
+    assert post(client,'/config',dict(config=changed,previous=cfg)).status_code==200
+    new=save(client,draft(1))
+    for o,pct in [(old,10),(new,17)]:
+        result=post(client,'/orders/'+o['id']+'/price-choice',dict(choice='happy',revision=o['revision']))
+        assert result.status_code==200
+        assert result.json['order']['happy_adjustment_pct']==pct
+    changed['happy_markup_pct']=-1
+    current=client.get('/admin/interno/api/state').json['config']
+    assert post(client,'/config',dict(config=changed,previous=current)).status_code==400
+
+
 def test_demo_stock_is_additive_persistent_and_not_replenished(client):
     from demo_data import prepare_demo
     old=save(client,draft(1))
