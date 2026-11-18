@@ -16,6 +16,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
+      - key: BARON_DEMO_STOCK
+        value: "1"
       - key: SECRET_KEY
         generateValue: true
       - key: ADMIN_PASSWORD

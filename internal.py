@@ -1,5 +1,6 @@
 """Authenticated internal workflow, using the existing Flask application."""
 from copy import deepcopy
+import os
 from io import BytesIO
 import json
 import uuid
@@ -53,7 +54,7 @@ def invalid(exc):
 @bp.get('')
 @bp.get('/')
 def workspace():
-    return render_template('internal.html',is_owner=session.get('role','owner')=='owner')
+    return render_template('internal.html',is_owner=session.get('role','owner')=='owner',demo_stock=os.environ.get('BARON_DEMO_STOCK')=='1')
 
 
 @bp.get('/api/state')

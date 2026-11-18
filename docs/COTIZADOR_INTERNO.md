@@ -1,5 +1,24 @@
 # Cotizador interno BARÓN
 
+## Actualización: flujo de dos estados y stock de prueba
+
+Por indicación del dueño, el único flujo de estados vigente es **Presupuesto ↔
+Aprobado**. Aprobar reserva tela; volver a presupuesto libera la reserva. No hay
+estado Fabricación/Instalado/Cancelado ni consumo físico automático.
+
+Solo el servicio de prueba habilita `BARON_DEMO_STOCK=1`. Al arrancar se agregan
+dos rollos de 50 m y tres retazos de distintas medidas por tela/color Roller,
+marcados DEMO y STOCK FICTICIO. Se conservan pedidos y existencias anteriores,
+y se guarda una copia privada del estado anterior en `before_demo_stock_v1`.
+La carga queda registrada y no se repite ni repone material al reiniciar. Las
+telas sin colores reciben colores explícitamente DEMO en esta base de prueba.
+No habilitar esta variable en producción.
+
+Los estados históricos ajenos a los dos nuevos se normalizan únicamente en
+esta preparación de la base de prueba, conservando `legacy_status`, auditoría,
+precios, consumos y reservas previos. Un pedido histórico consumido no devuelve
+stock automáticamente ni se reabre para reutilizar material.
+
 ## Arquitectura revisada
 
 Base revisada: `76b1ed907f9c5c4a579d785e67a174e39f9832a3` de main.

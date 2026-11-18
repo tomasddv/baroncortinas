@@ -271,11 +271,12 @@ def reserve(state, order, actor):
 
 def transition(state, order, target, actor):
     current = order['status']
+    if target not in ('presupuesto','aprobado'):
+        raise ValueError('Elegí Presupuesto o Aprobado')
     if current == target:
         return
-    allowed = {'presupuesto':{'aprobado','cancelado'},'aprobado':{'presupuesto','fabricación','cancelado'},
-               'fabricación':{'instalado','cancelado'},'instalado':set(),'cancelado':{'presupuesto'}}
-    if target not in allowed[current]:
+    allowed = {'presupuesto':{'aprobado'},'aprobado':{'presupuesto'}}
+    if target not in allowed.get(current,set()):
         raise ValueError('Transición de estado no permitida')
     if target=='presupuesto' and any(r['order_id']==order['id'] and r['status']=='consumido' for r in state['reservations']):
         raise ValueError('Este pedido ya tiene consumo. Duplicalo para un nuevo trabajo; no se vuelve a descontar.')
@@ -285,13 +286,7 @@ def transition(state, order, target, actor):
         if r['order_id']!=order['id'] or r['status']!='reservado':
             continue
         lot = state['lots'][r['lot_id']]
-        if target=='fabricación':
-            lot['length_m'] = round(lot['length_m']-r['length_m'],6)
-            r['status']='consumido'
-            if lot['kind']=='retazo' or lot['length_m']<=0:
-                lot['status']='consumido'
-            event='consumo'
-        elif target in ('presupuesto','cancelado'):
+        if target=='presupuesto':
             r['status']='liberado'
             lot['status']='disponible'
             event='liberación'

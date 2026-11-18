@@ -523,5 +523,9 @@ def material_delete(material_id):
 def too_large(_):
     return "Archivo demasiado grande: máximo 3 MB por solicitud",413
 
+if os.environ.get('BARON_DEMO_STOCK')=='1':
+    from demo_data import prepare_demo
+    prepare_demo()
+
 if __name__ == "__main__":
     app.run(debug=not bool(os.environ.get("RENDER")),port=int(os.environ.get("PORT",5000)))

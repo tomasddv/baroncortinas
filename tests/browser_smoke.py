@@ -12,6 +12,7 @@ OUT.mkdir(parents=True,exist_ok=True)
 tmp=tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
 os.environ['DATABASE_URL']='sqlite:///'+str(Path(tmp.name)/'browser.sqlite')
 os.environ['ADMIN_PASSWORD']='local-qa-only'
+os.environ['BARON_DEMO_STOCK']='1'
 from app import app
 server=make_server('127.0.0.1',0,app,threaded=True)
 threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -26,6 +27,8 @@ with sync_playwright() as p:
     page.locator('input[name=password]').fill('local-qa-only')
     page.get_by_role('button',name='Ingresar',exact=False).click()
     page.wait_for_selector('.group')
+    assert page.get_by_text('ENTORNO DE PRUEBA · STOCK FICTICIO',exact=True).count()==1
+    assert page.locator('#status-select option').evaluate_all('(items)=>items.map(e=>e.value)')==['presupuesto','aprobado']
     quantity=page.locator('#groups').get_by_label('Cantidad',exact=True)
     quantity.fill('3');quantity.press('Tab')
     assert page.locator('.unit').count()==0
@@ -56,8 +59,14 @@ with sync_playwright() as p:
     page.set_viewport_size({'width':1440,'height':1000})
     page.get_by_role('button',name='Cotizador',exact=True).click()
     page.screenshot(path=str(OUT/'cotizador-desktop.png'),full_page=True)
-    # Default and deselection confirmations actually discard exceptions.
     page.on('dialog',lambda d:d.accept())
+    page.locator('#status-select').select_option('aprobado')
+    page.get_by_role('button',name='Confirmar estado',exact=True).click()
+    page.locator('#order-status').filter(has_text='aprobado').wait_for()
+    page.locator('#status-select').select_option('presupuesto')
+    page.get_by_role('button',name='Confirmar estado',exact=True).click()
+    page.locator('#order-status').filter(has_text='presupuesto').wait_for()
+    # Default and deselection confirmations actually discard exceptions.
     page.locator('.attributes').get_by_role('checkbox',name='Color',exact=True).uncheck()
     assert page.locator('.unit').count()==0
     page.get_by_label('Personalizar unidades de este grupo').uncheck()

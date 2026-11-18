@@ -76,7 +76,7 @@ def test_snapshot_and_revisions(client):
     assert post(client,'/orders',update).status_code==409
 
 
-def test_stock_lifecycle_and_cancel(client):
+def test_two_status_workflow_reserves_and_releases_without_consuming(client):
     lot=post(client,'/lots',dict(kind='rollo',material_id='excel-screen',color_id='blanco')).json['lot']
     o=save(client)
     with transaction() as s:
@@ -92,10 +92,14 @@ def test_stock_lifecycle_and_cancel(client):
         assert s['lots'][lot['id']]['length_m']==50
     o=status('presupuesto',o)
     with transaction() as s: assert all(r['status']=='liberado' for r in s['reservations'])
-    o=status('aprobado',o); o=status('fabricación',o); o=status('fabricación',o)
-    with transaction() as s: assert s['lots'][lot['id']]['length_m']==44
-    o=status('cancelado',o)
-    with transaction() as s: assert s['lots'][lot['id']]['length_m']==44
+    o=status('aprobado',o); o=status('aprobado',o)
+    with transaction() as s:
+        assert s['lots'][lot['id']]['length_m']==50
+        assert len([r for r in s['reservations'] if r['status']=='reservado'])==3
+    r=post(client,'/orders/'+o['id']+'/status',dict(status='fabricación',revision=o['revision'],confirm=True))
+    assert r.status_code==400
+    o=status('presupuesto',o)
+    with transaction() as s: assert s['lots'][lot['id']]['length_m']==50
 
 
 def test_insufficient_rolls_atomic(client):
@@ -213,16 +217,40 @@ def test_reprice_explicit_and_invalid_inputs(client):
     assert post(client,'/preview',data).status_code==400
 
 
-def test_stale_stock_adjustment_cannot_restore_consumed_fabric(client):
+def test_stale_stock_adjustment_cannot_override_reservation(client):
     lot=post(client,'/lots',dict(kind='rollo',material_id='excel-screen',color_id='blanco')).json['lot']
     o=save(client,draft(1))
-    for target in ('aprobado','fabricación'):
+    for target in ('aprobado',):
         r=post(client,'/orders/'+o['id']+'/status',dict(status=target,revision=o['revision'],confirm=True))
         assert r.status_code==200
         o=r.json['order']
     r=post(client,'/lots/'+lot['id'],dict(revision=lot['revision'],width_cm=280,length_m=50,reason='Ajuste desde pantalla desactualizada'))
     assert r.status_code==409
-    with transaction() as s: assert s['lots'][lot['id']]['length_m']==48
+    with transaction() as s: assert s['lots'][lot['id']]['length_m']==50
+
+
+def test_demo_stock_is_additive_persistent_and_not_replenished(client):
+    from demo_data import prepare_demo
+    old=save(client,draft(1))
+    actual=post(client,'/lots',dict(kind='rollo',material_id='excel-screen',color_id='blanco',length_m=7)).json['lot']
+    created=prepare_demo()
+    assert created>0
+    with transaction() as s:
+        assert s['orders'][old['id']]['total']==old['total']
+        assert s['lots'][actual['id']]['length_m']==7
+        assert s['before_demo_stock_v1']['orders'][old['id']]['total']==old['total']
+        demos=[l for l in s['lots'].values() if l.get('demo')]
+        assert len(demos)==created
+        assert any(l['kind']=='retazo' and l['width_cm']>=150 and l['length_m']>=2 for l in demos)
+        sample=demos[0]['id']
+        s['lots'][sample]['length_m']=4
+    assert prepare_demo()==0
+    with app.test_client() as another:
+        with another.session_transaction() as session:
+            session.update(admin_auth=True,csrf='test-csrf')
+        data=another.get('/admin/interno/api/state').json
+        assert old['id'] in [o['id'] for o in data['orders']]
+        assert next(l for l in data['lots'] if l['id']==sample)['length_m']==4
     data=draft(1);data['groups'][0]['base']['width_cm']=500
     assert post(client,'/preview',data).status_code==400
 
