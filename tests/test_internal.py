@@ -211,6 +211,18 @@ def test_reprice_explicit_and_invalid_inputs(client):
     assert post(client,'/orders',data).json['order']['total']==changed
     data=draft(1);data['valid_until']='2026-02-31'
     assert post(client,'/preview',data).status_code==400
+
+
+def test_stale_stock_adjustment_cannot_restore_consumed_fabric(client):
+    lot=post(client,'/lots',dict(kind='rollo',material_id='excel-screen',color_id='blanco')).json['lot']
+    o=save(client,draft(1))
+    for target in ('aprobado','fabricación'):
+        r=post(client,'/orders/'+o['id']+'/status',dict(status=target,revision=o['revision'],confirm=True))
+        assert r.status_code==200
+        o=r.json['order']
+    r=post(client,'/lots/'+lot['id'],dict(revision=lot['revision'],width_cm=280,length_m=50,reason='Ajuste desde pantalla desactualizada'))
+    assert r.status_code==409
+    with transaction() as s: assert s['lots'][lot['id']]['length_m']==48
     data=draft(1);data['groups'][0]['base']['width_cm']=500
     assert post(client,'/preview',data).status_code==400
 
