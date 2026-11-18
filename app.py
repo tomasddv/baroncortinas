@@ -15,6 +15,7 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from storage import StorageError, load_catalog, read_image, remote_enabled, save_catalog, save_image, storage_label
 from manufacturing import bp as manufacturing_bp, calculate_hardware
 from marketing import bp as marketing_bp
+from internal import bp as internal_bp
 
 app = Flask(__name__)
 app.config.update(
@@ -28,6 +29,7 @@ if not app.config['SECRET_KEY']:
     raise RuntimeError("En Render es obligatorio configurar SECRET_KEY")
 app.register_blueprint(manufacturing_bp)
 app.register_blueprint(marketing_bp)
+app.register_blueprint(internal_bp)
 serializer = URLSafeTimedSerializer(app.config["SECRET_KEY"], salt="cotizador-presupuesto-v1")
 PRODUCTS = {
     "blackout": {"name": "Roller Blackout", "subtitle": "Oscuridad total y privacidad", "families": ["blackout"]},
@@ -167,17 +169,22 @@ def security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' https:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
-    if request.path.startswith("/admin"):
+    if request.path.startswith(('/admin','/api/','/cotizar/')) or request.path=='/carrito':
         response.headers["Cache-Control"] = "no-store"
     return response
 
 @app.before_request
 def admin_guards():
-    if request.path.startswith("/admin") and request.method == "POST":
-        provided = request.form.get("csrf", "")
+    private_legacy = request.path.startswith(('/cotizar/', '/api/')) or request.path == '/carrito'
+    if private_legacy and not admin_ok():
+        abort(401)
+    if (request.path.startswith('/admin') or private_legacy) and request.method in ('POST','PUT','PATCH','DELETE'):
+        provided = request.headers.get('X-CSRF-Token') or request.form.get("csrf", "")
         expected = session.get("csrf", "")
         if not expected or not hmac.compare_digest(provided, expected):
             abort(403)
+    if session.get('role') == 'staff' and request.path.startswith('/admin') and not request.path.startswith('/admin/interno') and request.path not in ('/admin/salir',):
+        abort(403)
     if request.path.startswith("/admin") and request.path not in ("/admin/login",) and not admin_ok():
         return redirect(url_for("admin_login", next=request.path))
 
@@ -200,8 +207,7 @@ def health():
 
 @app.get("/")
 def home():
-    cfg = load_catalog()
-    return render_template("home.html", settings=cfg["settings"], materials=cfg["materials"])
+    return redirect(url_for('internal.workspace') if admin_ok() else url_for('admin_login'))
 
 @app.get("/carrito")
 def cart():
@@ -301,8 +307,19 @@ def admin_login():
         if expected and hmac.compare_digest(given,expected):
             session.clear()
             session["admin_auth"]=True
+            session['role']='owner'
+            session['user']='dueño'
             csrf_token()
-            return redirect(url_for("admin"))
+            return redirect(url_for('internal.workspace'))
+        from werkzeug.security import check_password_hash
+        users=json.loads(os.environ.get('STAFF_USERS_JSON','{}'))
+        username=request.form.get('username','').strip()
+        record=users.get(username,{})
+        if record.get('password_hash') and check_password_hash(record['password_hash'],given):
+            session.clear()
+            session.update(admin_auth=True,role='staff',user=username)
+            csrf_token()
+            return redirect(url_for('internal.workspace'))
         flash("Contraseña incorrecta o ADMIN_PASSWORD no configurada", "error")
     return render_template("login.html",configured=bool(os.environ.get("ADMIN_PASSWORD")))
 
@@ -492,10 +509,12 @@ def material_editor(material_id=None):
 @app.post("/admin/material/<material_id>/eliminar")
 def material_delete(material_id):
     cfg=load_catalog()
-    cfg["materials"]=[m for m in cfg["materials"] if m["id"]!=material_id]
+    for material in cfg['materials']:
+        if material['id']==material_id:
+            material['active']=False
     try:
         save_catalog(cfg)
-        flash("Material eliminado del catálogo (la imagen previa queda en el repositorio)","success")
+        flash("Material desactivado; se conserva el registro y su imagen", "success")
     except StorageError as exc:
         flash(str(exc),"error")
     return redirect(url_for("admin")+"#catalogo")
