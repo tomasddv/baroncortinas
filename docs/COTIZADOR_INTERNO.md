@@ -2,6 +2,11 @@
 
 ## Actualización: flujo de dos estados y stock de prueba
 
+El despiece presenta una sola ficha por cortina con todos sus insumos editables,
+subtotal por pieza y costo total por cortina. Agregar un insumo desde esa ficha
+lo asigna a la cortina correspondiente. Los datos y exportaciones conservan
+el detalle individual de cada material para cálculos, auditoría y reservas.
+
 Por indicación del dueño, el único flujo de estados vigente es **Presupuesto ↔
 Aprobado**. Aprobar reserva tela; volver a presupuesto libera la reserva. No hay
 estado Fabricación/Instalado/Cancelado ni consumo físico automático.

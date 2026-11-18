@@ -52,11 +52,26 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Despiece',exact=True).click()
     assert not page.locator('#find-remnants').is_checked()
     assert not page.locator('#remnant-results').is_visible()
+    assert page.locator('.bom-curtain').count()==3
+    assert page.locator('.bom-curtain').nth(0).locator('.bom-line').count()==3
+    second=page.locator('.bom-curtain').nth(1)
+    second.get_by_role('button',name='＋ Agregar insumo',exact=True).click()
+    added=second.locator('.bom-line').last
+    added.get_by_label('Insumo',exact=True).fill('Accesorio de prueba')
+    added.get_by_label('Cantidad física',exact=True).fill('2')
+    added.get_by_label('Costo unitario',exact=True).fill('1234')
+    with page.expect_response(lambda r:'/bom' in r.url and r.request.method=='POST') as saved_bom:
+        page.get_by_role('button',name='Guardar despiece',exact=True).click()
+    assert saved_bom.value.status==200
+    assert page.locator('.bom-curtain').nth(1).locator('.bom-line').count()==4
+    assert page.locator('body').evaluate('(e)=>e.scrollWidth <= innerWidth')
     page.screenshot(path=str(OUT/'despiece-mobile.png'),full_page=True)
     page.get_by_role('button',name='Presupuesto cliente',exact=True).click()
     assert page.locator('#client-preview .client-row').count()==2
     page.screenshot(path=str(OUT/'presupuesto-mobile.png'),full_page=True)
     page.set_viewport_size({'width':1440,'height':1000})
+    page.get_by_role('button',name='Despiece',exact=True).click()
+    page.screenshot(path=str(OUT/'despiece-desktop.png'),full_page=True)
     page.get_by_role('button',name='Cotizador',exact=True).click()
     page.screenshot(path=str(OUT/'cotizador-desktop.png'),full_page=True)
     page.on('dialog',lambda d:d.accept())
