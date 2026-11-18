@@ -1,0 +1,41 @@
+# Entorno de revisión independiente. No reutilizar el Blueprint productivo.
+# Requiere una plaza de PostgreSQL Free disponible en el workspace.
+# La base Free vence a los 30 días: usar solo datos de prueba.
+services:
+  - type: web
+    name: baron-cotizador-prueba
+    runtime: python
+    plan: free
+    region: oregon
+    repo: https://github.com/tomasddv/baroncortinas
+    branch: codex/cotizador-interno-baron
+    autoDeployTrigger: off
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: baron-cotizador-prueba-db
+          property: connectionString
+      # Catálogo e imágenes desde esta rama. Sin token ni repositorio remoto:
+      # la vista de prueba no puede escribir en el catálogo de producción.
+      - key: GITHUB_REPO
+        value: ""
+      - key: GITHUB_TOKEN
+        value: ""
+      - key: GITHUB_BRANCH
+        value: codex/cotizador-interno-baron
+databases:
+  - name: baron-cotizador-prueba-db
+    databaseName: baron_prueba
+    user: baron_prueba
+    plan: free
+    region: oregon
+    ipAllowList: []
