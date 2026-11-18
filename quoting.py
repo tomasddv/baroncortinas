@@ -3,6 +3,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 import math
+import re
 import uuid
 
 ATTRIBUTES = {'material_id', 'color_id', 'side', 'drop', 'tube', 'room'}
@@ -77,14 +78,24 @@ def validate_config(cfg):
         if m['id'] in ids:
             raise ValueError('Identificador de tela duplicado')
         ids.add(m['id'])
-        text(m['id'],100); text(m['name'],100)
+        text(m['id'],100)
+        m['name']=text(m['name'],100)
+        if not m['name']:
+            raise ValueError('Ingresá el nombre de cada tela')
+        if m.get('family') not in ('blackout','sunscreen','traslucida','tela'):
+            raise ValueError('Tipo de tela inválido')
         m['price'] = num(m['price'],'Precio tela')
         m['roll_width_cm'] = num(m['roll_width_cm'],'Ancho rollo',20,600)
         if m['price_unit'] not in ('m2','metro_lineal'):
             raise ValueError('Unidad de tela inválida')
         seen = set()
         for c in m['colors']:
-            text(c['id'],100); text(c['name'],100)
+            text(c['id'],100)
+            c['name']=text(c['name'],100)
+            if not c['name']:
+                raise ValueError('Ingresá el nombre de cada color')
+            if c.get('hex') and not re.fullmatch(r'#[a-fA-F0-9]{6}',c['hex']):
+                raise ValueError('Muestra de color inválida')
             if c['id'] in seen:
                 raise ValueError('Color duplicado')
             seen.add(c['id'])

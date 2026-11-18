@@ -1,5 +1,10 @@
 # Cotizador interno BARÓN
 
+Configuración se edita mediante formularios: precios y pagos, medidas y stock,
+caños/sistemas, telas y colores, adicionales y datos del comercio. No se expone
+un editor JSON. Los identificadores, fotos y metadatos existentes se preservan;
+los precios especiales por color pueden dejarse vacíos para heredar la tela.
+
 ## Actualización: flujo de dos estados y stock de prueba
 
 El despiece presenta una sola ficha por cortina con todos sus insumos editables,

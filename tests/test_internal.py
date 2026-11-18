@@ -204,6 +204,16 @@ def test_config_preferences_and_billable_minimum(client):
     assert len(client.get('/admin/interno/api/state').json['preferences'])==9
 
 
+@pytest.mark.parametrize('field,value',[('name','   '),('family','desconocida'),('hex','rojo')])
+def test_configuration_rejects_invalid_material_fields(client,field,value):
+    cfg=client.get('/admin/interno/api/state').json['config']
+    changed=deepcopy(cfg)
+    target=changed['materials'][0]['colors'][0] if field=='hex' else changed['materials'][0]
+    target[field]=value
+    assert post(client,'/config',dict(config=changed,previous=cfg)).status_code==400
+    assert client.get('/admin/interno/api/state').json['config']==cfg
+
+
 def test_reprice_explicit_and_invalid_inputs(client):
     o=save(client,draft(1))
     with transaction() as s:s['config']['materials'][0]['price']=30000

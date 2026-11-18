@@ -81,6 +81,52 @@ with sync_playwright() as p:
     page.locator('#status-select').select_option('presupuesto')
     page.get_by_role('button',name='Confirmar estado',exact=True).click()
     page.locator('#order-status').filter(has_text='presupuesto').wait_for()
+    # Configuration uses forms and preserves the prices of the stored order.
+    page.get_by_role('button',name='Configuración',exact=True).click()
+    assert page.locator('#config-json').count()==0
+    before=page.request.get(BASE+'/admin/interno/api/state').json()['config']
+    page.get_by_text('Telas y colores',exact=True).click()
+    screen=page.locator('[data-material-id="excel-screen"]')
+    screen.locator('summary').click()
+    screen.get_by_label('Precio de tela',exact=True).fill('24000')
+    screen.locator('.settings-color').first.get_by_label('Precio especial del color',exact=True).fill('26000')
+    screen.get_by_role('button',name='＋ Agregar color',exact=True).click()
+    screen.locator('.settings-color').last.get_by_label('Nombre del color',exact=True).fill('Azul de prueba')
+    page.get_by_text('Caños y sistemas',exact=True).click()
+    page.locator('[data-tube="32"]').get_by_label('Precio del caño por metro',exact=True).fill('38000')
+    page.get_by_text('Zócalos, cadenas y soportes',exact=True).click()
+    chain=page.locator('[data-extra-kind="chain"]')
+    chain.get_by_role('button',name='＋ Agregar cadenas',exact=True).click()
+    chain.get_by_label('Nombre del adicional',exact=True).fill('Cadena de prueba')
+    chain.get_by_label('Precio del adicional',exact=True).fill('1500')
+    with page.expect_response(lambda r:'/api/config' in r.url and r.request.method=='POST') as settings_saved:
+        page.get_by_role('button',name='Guardar configuración',exact=True).click()
+    assert settings_saved.value.status==200
+    page.get_by_text('Configuración guardada',exact=True).wait_for()
+    after=page.request.get(BASE+'/admin/interno/api/state').json()['config']
+    m=next(m for m in after['materials'] if m['id']=='excel-screen')
+    assert m['price']==24000 and m['colors'][0]['price_override']==26000
+    assert any(c['name']=='Azul de prueba' for c in m['colors'])
+    assert m['source']==next(m for m in before['materials'] if m['id']=='excel-screen')['source']
+    assert after['tubes']['32']['price_m']==38000
+    assert after['extras']['chain']['Cadena de prueba']==1500
+    stored=page.request.get(BASE+'/admin/interno/api/orders/'+saved_bom.value.json()['order']['id']).json()['order']
+    assert stored['total']==saved_bom.value.json()['order']['total']
+    page.get_by_text('Telas y colores',exact=True).click()
+    screen.locator('summary').click()
+    screen.locator('.settings-color').first.get_by_label('Precio especial del color',exact=True).fill('')
+    with page.expect_response(lambda r:'/api/config' in r.url and r.request.method=='POST') as cleared:
+        page.get_by_role('button',name='Guardar configuración',exact=True).click()
+    assert cleared.value.status==200
+    page.get_by_text('Configuración guardada',exact=True).wait_for()
+    cleared_cfg=page.request.get(BASE+'/admin/interno/api/state').json()['config']
+    assert 'price_override' not in next(m for m in cleared_cfg['materials'] if m['id']=='excel-screen')['colors'][0]
+    page.screenshot(path=str(OUT/'configuracion-desktop.png'),full_page=True)
+    page.set_viewport_size({'width':390,'height':844})
+    assert page.locator('body').evaluate('(e)=>e.scrollWidth <= innerWidth')
+    page.screenshot(path=str(OUT/'configuracion-mobile.png'),full_page=True)
+    page.set_viewport_size({'width':1440,'height':1000})
+    page.get_by_role('button',name='Cotizador',exact=True).click()
     # Default and deselection confirmations actually discard exceptions.
     page.locator('.attributes').get_by_role('checkbox',name='Color',exact=True).uncheck()
     assert page.locator('.unit').count()==0
