@@ -25,3 +25,8 @@ input[readonly]{background:#f0f3f7;color:#53677d}
 dialog{border:1px solid #dce4ed;border-radius:16px;padding:26px;max-width:560px;width:calc(100% - 28px);color:#172b43;box-shadow:0 16px 80px #102a4840}dialog::backdrop{background:#14294488}
 .price-choice-options{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}.price-choice-option{flex-direction:column;padding:20px 12px}.face{font-size:3rem;line-height:1.2}#price-choice-error{color:#a92d35}#status-explanation{font-size:.85rem}
 #bom-order-select,#bom-order-search{margin-bottom:14px}@media(max-width:450px){dialog{padding:20px}.price-choice-options{gap:10px}.price-choice-option{padding:16px 8px;font-size:.88rem}}
+
+.history-row-actions{display:flex;gap:10px;flex-wrap:wrap}
+#history-export-formats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0}
+.history-format{min-height:90px;flex-direction:column;text-align:center}.history-format small{font-weight:400}
+@media(max-width:600px){.history-row-actions{width:100%}.history-row-actions>button{flex:1}#history-export-dialog .section-head{align-items:start}#history-export-dialog h2{margin-top:0}}

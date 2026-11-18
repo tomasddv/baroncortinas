@@ -174,6 +174,26 @@ with sync_playwright() as p:
     assert page.locator('.group').count()==2
     page.locator('#add-group').scroll_into_view_if_needed()
     assert page.locator('#add-group').bounding_box()['y']>=page.locator('.group').last.bounding_box()['y']+page.locator('.group').last.bounding_box()['height']
+    # Export the selected historical record without replacing the unsaved quote.
+    page.get_by_role('button',name='Historial',exact=True).click()
+    historical=page.locator('#history-list .list-row').filter(has_text='Segundo aprobado')
+    assert historical.get_by_role('button',name='Abrir',exact=True).count()==1
+    historical.get_by_role('button',name='Presupuesto cliente',exact=True).click()
+    popup=page.locator('#history-export-dialog')
+    popup.wait_for()
+    assert 'Segundo aprobado' in popup.inner_text()
+    assert popup.locator('a').count()==4
+    assert page.locator('.group').count()==2
+    assert popup.bounding_box()['width']<=390
+    page.screenshot(path=str(OUT/'historial-formatos-mobile.png'),full_page=True)
+    with page.expect_download() as downloaded:
+        popup.get_by_role('link',name='Descargar PDF',exact=True).click()
+    assert downloaded.value.suggested_filename==extra['number']+'.pdf'
+    popup.wait_for(state='hidden')
+    assert page.locator('.group').count()==2
+    historical.get_by_role('button',name='Presupuesto cliente',exact=True).click()
+    assert popup.get_by_role('link',name='Descargar Excel',exact=True).get_attribute('href').endswith('/'+extra['id']+'/export/xlsx')
+    popup.get_by_role('button',name='Cerrar formatos',exact=True).click()
     assert errors==[],errors
     print('PASS: mobile/desktop; no horizontal overflow; variants A/B/C; confirmations; separate BOM; no JavaScript errors')
     browser.close()

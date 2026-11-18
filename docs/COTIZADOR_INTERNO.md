@@ -2,6 +2,10 @@
 
 ## Selección de aprobados y presentación comercial
 
+Historial ofrece «Presupuesto cliente» junto a «Abrir». Abre un selector de
+formatos PDF/JPG/PNG/Excel, adaptado al celular, y descarga el pedido guardado
+sin reemplazar el presupuesto que se esté editando ni recalcular sus precios.
+
 Despiece muestra un listado buscable de todos los presupuestos aprobados y
 permite seleccionar cuál consultar, sin crear nuevas reservas. Un pedido ya
 aprobado muestra esa condición y no permite reconfirmar el mismo estado. Las
