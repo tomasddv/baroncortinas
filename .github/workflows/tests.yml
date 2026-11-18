@@ -21,6 +21,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: node --check static/internal.js
       - run: node --check static/settings.js
+      - run: node --check static/inventory.js
       - run: python -m pytest -q
         env:
           TEST_POSTGRES_URL: postgresql+psycopg://postgres:test@localhost:5432/baron_test

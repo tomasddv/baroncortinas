@@ -48,10 +48,10 @@ def xlsx(order,columns,bom=False,reservations=()):
         summary.append(['Precio comercial',order['total']])
         if reservations:
             rs=book.create_sheet('Reservas')
-            keys=['lot_id','line_id','length_m','status','at']
-            rs.append(['Lote','Línea','Largo m','Estado','Fecha'])
+            keys=['lot_id','line_id','length_m','quantity','unit','status','at']
+            rs.append(['Lote','Línea','Largo m','Cantidad insumo','Unidad','Estado','Fecha'])
             for r in reservations:
-                rs.append([safe(r[k]) for k in keys])
+                rs.append([safe(r.get(k,'')) for k in keys])
     else:
         sheet.append([COLUMNS[k]+(' (cm)' if k.endswith('_cm') else '') for k in columns])
         for row in commercial_rows(order):

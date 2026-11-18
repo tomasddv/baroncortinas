@@ -77,6 +77,7 @@ def validate_config(cfg):
     cfg['payments'] = {text(k,40): num(v,k,-100,1000) for k,v in cfg['payments'].items()}
     ids = set()
     for m in cfg['materials']:
+        if m.get('deleted'):m['active']=False
         if m['id'] in ids:
             raise ValueError('Identificador de tela duplicado')
         ids.add(m['id'])
@@ -156,18 +157,25 @@ def quote_order(body, cfg):
     groups = deepcopy(body.get('groups'))
     units, bom = [], []
     for i, raw in enumerate(resolve_groups(groups)):
+        from inventory import default_products,generic_unit
+        product=next((p for p in cfg.get('products',default_products()) if p['id']==raw.get('product_id','roller') and p.get('active',True) and not p.get('deleted')),None)
+        if not product:raise ValueError('Producto o modelo no disponible')
+        if product['calculation']!='roller':
+            unit,lines=generic_unit(raw,product,cfg,i)
+            units.append(unit);bom.extend(lines)
+            continue
         w = num(raw.get('width_cm'),'Ancho',30,600)
         h = num(raw.get('height_cm'),'Alto',30,600)
         tube = str(raw.get('tube','32'))
         if tube not in cfg['tubes']:
             raise ValueError('Caño inválido')
         rule = cfg['tubes'][tube]
-        material = next((m for m in cfg['materials'] if m['id']==raw.get('material_id') and m.get('active',True)),None)
+        material = next((m for m in cfg['materials'] if m['id']==raw.get('material_id') and m.get('active',True) and not m.get('deleted')),None)
         if not material:
             raise ValueError('Tela no disponible')
         if material.get('family') not in ('sunscreen','blackout','traslucida'):
             raise ValueError('Este cotizador admite Roller; conservá las telas tradicionales para su módulo específico')
-        color = next((c for c in material['colors'] if c['id']==raw.get('color_id')),None)
+        color = next((c for c in material['colors'] if c['id']==raw.get('color_id') and not c.get('deleted')),None)
         if not color:
             raise ValueError('Color no válido para la tela elegida')
         side, drop = raw.get('side','Derecha'), raw.get('drop','Detrás')
@@ -191,9 +199,9 @@ def quote_order(body, cfg):
         bom.extend(lines)
         for name, q, unit, price in [('Caño '+tube,w/100,'m',rule['price_m']),
                                      ('Sistema '+('41 (42)' if tube!='32' else '32'),1,'unidad',rule['system_price'])]:
-            bom.append(line(name,q,unit,price))
+            bom.append(line(name,q,unit,price,stock_key='tube:'+tube if name.startswith('Caño') else 'system:'+('32' if tube=='32' else '42')))
         if raw.get('guides') is True:
-            bom.append(line('Guías (criterio BARÓN: alto × tarifa)',h/100,'m',cfg['guides_price_m']))
+            bom.append(line('Guías (criterio BARÓN: alto × tarifa)',h/100,'m',cfg['guides_price_m'],stock_key='guides'))
         options = {}
         for field, label in [('zocalo','Zócalo'),('chain','Cadena'),('mount','Soportes')]:
             name = text(raw.get(field,''),100)
@@ -201,7 +209,7 @@ def quote_order(body, cfg):
             if name:
                 if name not in cfg['extras'][field]:
                     raise ValueError(label+': configurá el precio del adicional')
-                bom.append(line(label+' '+name,w/100 if field=='zocalo' else 1,'m' if field=='zocalo' else 'unidad',float(cfg['extras'][field][name])))
+                bom.append(line(label+' '+name,w/100 if field=='zocalo' else 1,'m' if field=='zocalo' else 'unidad',float(cfg['extras'][field][name]),stock_key=field+':'+name))
         cost = money(sum(l['subtotal'] for l in bom if l['curtain']==i+1))
         price = money(cost*(1+cfg['markup_pct']/100)*(1+cfg['tax_pct']/100))
         units.append(dict(group=raw['group'], index=raw['index'], room=text(raw.get('room',''),100),
@@ -209,6 +217,12 @@ def quote_order(body, cfg):
             width_cm=w,height_cm=h,material=material['name'], material_id=material['id'],color=color['name'],
             color_id=color['id'],tube=tube,side=side,drop=drop,**options,guides=raw.get('guides') is True,
             unit_price=price,quantity=1,subtotal=price,cut_width_cm=cut_w,cut_height_cm=cut_h))
+    linked={c.get('pricing_key'):c for c in cfg.get('stock_components',[]) if c.get('pricing_key')}
+    for line in bom:
+        c=linked.get(line.get('stock_key'))
+        if c:
+            if c.get('deleted') or not c.get('active',True):raise ValueError('Insumo no disponible: '+c['name'])
+            line['component_id']=c['id']
     discount = num(body.get('discount_pct',0),'Descuento',0,100)
     subtotal = money(sum(u['subtotal'] for u in units))
     total = money(subtotal*(1-discount/100))
@@ -286,12 +300,18 @@ def stock_warnings(state, order, cfg):
     for lot in state['lots'].values():
         if lot['kind']=='rollo' and available(state,lot)<=lot.get('minimum_m',cfg['stock_min_m']):
             warnings.append('Poco stock: '+lot['id']+' ('+str(available(state,lot))+' m libres)')
+    from inventory import component_available
+    for c in cfg.get('stock_components',[]):
+        qty=sum(component_available(state,l) for l in state.get('component_lots',{}).values() if l['component_id']==c['id'])
+        if c.get('track_stock') and c.get('active',True) and qty<=c.get('minimum_qty',0):warnings.append('Poco stock de '+c['name']+': '+str(round(qty,3))+' '+c['unit'])
     return warnings
 
 
 def reserve(state, order, actor):
     for line in order['bom']:
         if not line.get('fabric'):
+            from inventory import reserve_component
+            reserve_component(state,line,order,actor)
             continue
         candidates = [l for l in state['lots'].values() if l['kind']=='rollo' and l['status']=='disponible'
             and l['material_id']==line['material_id'] and l['color_id']==line['color_id']
@@ -325,6 +345,12 @@ def transition(state, order, target, actor):
         reserve(state,order,actor)
     for r in state['reservations']:
         if r['order_id']!=order['id'] or r['status']!='reservado':
+            continue
+        if r.get('kind')=='insumo':
+            if target=='presupuesto':
+                r['status']='liberado'
+                state['component_lots'][r['lot_id']]['revision']+=1
+                state['movements'].append(dict(at=now(),actor=actor,event='liberación',lot_id=r['lot_id'],order_id=order['id'],quantity=r['quantity'],unit=r['unit']))
             continue
         lot = state['lots'][r['lot_id']]
         if target=='presupuesto':

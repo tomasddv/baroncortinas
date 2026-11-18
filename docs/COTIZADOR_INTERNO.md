@@ -190,3 +190,49 @@ real por tela/lote, mínimos, descuentos/impuestos/pagos, accesorios adicionales
 criterio de guías y numeración BAR-000001 antes de emitir presupuestos reales.
 Ningún porcentaje de IVA o pago se toma del libro proveedor automáticamente.
 La casilla de reglas revisadas informa validación comercial; no bloquea trabajo.
+
+
+## Catálogo, modelos y stock de insumos
+
+En Configuración se pueden editar, eliminar y recuperar telas, insumos y modelos.
+Eliminar archiva el registro: conserva sus identificadores, stock y presupuestos
+históricos, pero deja de ofrecerlo en nuevas cotizaciones y entradas.
+
+Stock e insumos separa telas de caños, cadenas, sistemas y accesorios. Cada artículo
+usa su unidad (m, m², unidad o par), costo y mínimo de alerta. Registrar una entrada
+activa su control de existencias. Los componentes vinculados al Roller conservan
+sus tarifas y fórmulas; cambiar su costo actualiza la tarifa correspondiente para
+nuevos presupuestos. El despiece permite vincular una línea manual a un artículo.
+Aprobar reserva tela e insumos de forma atómica, incluso repartiendo insumos entre
+lotes. Repetir Aprobado no duplica la reserva; volver a Presupuesto la libera.
+Cambiar de unidad requiere crear otro artículo cuando ya tiene lotes.
+
+Productos y modelos permite mantener Roller y agregar modelos con precio fijo,
+por m² solicitado, por metro de ancho o por suma de tela e insumos de su receta.
+Los recargos e impuestos generales se aplican después. Cada receta define insumo,
+regla de cantidad (fija, ancho, alto, superficie o perímetro) y factor. La tela es
+opcional; su ancho multiplicador y extra de alto son explícitos. No se inventan
+reglas específicas para modelos nuevos ni se calculan paños múltiples: se rechaza
+un corte que exceda el ancho nominal de tela. Configurar y validar cada receta
+antes de usarla comercialmente. Los presupuestos guardan precios y despiece.
+
+### Excel de catálogo y stock
+
+Desde Stock e insumos se exporta todo, solo catálogo o solo stock, o se descarga
+una plantilla .xlsx. Las hojas son Telas, Colores, Insumos, Productos, Recetas,
+Stock telas y Stock insumos. Instrucciones detalla códigos, unidades y reglas.
+Se admiten hasta 5000 filas y 3 MB comprimidos; no se aceptan fórmulas ni macros.
+
+Los códigos existentes actualizan registros; códigos nuevos los agregan. Un código
+vacío genera uno nuevo. Las filas omitidas se conservan. Para eliminar del catálogo
+usar Eliminada/Eliminado, o los botones del formulario. Las recetas se agregan o
+actualizan por producto/insumo/regla; para quitar una línea usar el formulario.
+Los lotes llevan cantidades totales físicas, no incrementos. Reservado y Disponible
+son informativos y no se importan; Revisión protege contra editar un export viejo.
+
+Revisar Excel valida todas las hojas y muestra cambios sin modificar los datos.
+Confirmar importación aplica el conjunto en una transacción y registra auditoría.
+Si otro usuario modifica stock o catálogo después de la vista previa se exige
+revisarlo de nuevo. Los ajustes no pueden dejar existencias debajo de lo reservado.
+En el entorno con BARON_DEMO_STOCK=1 se agregan lotes ficticios de insumos una sola
+vez, sin reponerlos al reiniciar ni reemplazar los presupuestos existentes.

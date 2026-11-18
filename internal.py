@@ -4,8 +4,10 @@ import os
 from io import BytesIO
 import json
 import uuid
-from flask import Blueprint, abort, jsonify, render_template, request, send_file, session
+from flask import Blueprint, abort, jsonify, render_template, request, send_file, session,current_app
+from itsdangerous import URLSafeTimedSerializer,BadSignature
 from private_store import transaction
+from inventory import ensure_inventory,validate_inventory_catalogue,reconcile_prices,component_available
 from storage import load_catalog
 from quoting import (COLUMNS, defaults, validate_config, quote_order, commercial_rows,
     num, text, money, now, audit, available, matches, stock_warnings, transition, apply_price_choice)
@@ -26,6 +28,7 @@ def config(state):
     if state['config'] is None:
         state['config'] = defaults(load_catalog())
     state['config'].setdefault('happy_markup_pct',10)
+    ensure_inventory(state,state['config'])
     return state['config']
 
 
@@ -64,7 +67,8 @@ def state_api():
         cfg = config(state)
         orders = [{k:o.get(k) for k in ('id','number','customer','city','date','status','total','revision','updated_at')} for o in state['orders'].values()]
         lots = [dict(l,available_m=available(state,l)) for l in state['lots'].values()]
-        return jsonify(config=cfg,orders=orders,lots=lots,movements=state['movements'][-200:],
+        components=[dict(l,available_qty=component_available(state,l)) for l in state['component_lots'].values()]
+        return jsonify(config=cfg,orders=orders,lots=lots,component_lots=components,movements=state['movements'][-200:],
                        columns=COLUMNS,preferences=state['preferences'].get(actor(),list(COLUMNS)))
 
 
@@ -208,9 +212,13 @@ def save_bom(ident):
                         raise ValueError('Retazo incompatible o ya reservado')
                     item['remnant_id']=line['remnant_id']
             item['subtotal']=money(item.get('billable_quantity',item['quantity'])*item['unit_cost'])
+            if not fabric and line.get('component_id'):
+                component=next((c for c in config(state)['stock_components'] if c['id']==line['component_id'] and c.get('active',True) and not c.get('deleted')),None)
+                if not component or component['unit']!=item['unit']:raise ValueError('Insumo o unidad del despiece inválidos')
+                item['component_id']=component['id']
             clean.append(item)
         # Exactly one fabric allocation per curtain; cannot bypass stock by deleting it.
-        if sorted(l['curtain'] for l in clean if l.get('fabric')) != list(range(1,len(order['units'])+1)):
+        if sorted(l['curtain'] for l in clean if l.get('fabric')) != [i+1 for i,u in enumerate(order['units']) if u.get('material_id')]:
             raise ValueError('Conservá una línea física de tela por cortina')
         audit(state,'editar despiece',actor(),order_id=ident,before=order['bom'],after=clean)
         order['bom']=clean
@@ -232,7 +240,7 @@ def create_lot():
     with transaction() as state:
         cfg=config(state)
         m=next((m for m in cfg['materials'] if m['id']==data.get('material_id')),None)
-        if not m or data.get('color_id') not in [c['id'] for c in m['colors']]:
+        if not m or m.get('deleted') or data.get('color_id') not in [c['id'] for c in m['colors'] if not c.get('deleted')]:
             raise ValueError('Tela o color inválidos')
         kind=data.get('kind')
         if kind not in ('rollo','retazo'):
@@ -283,9 +291,96 @@ def save_config():
         # Compare the exact previous config to avoid silently overwriting another owner edit.
         if data.get('previous') != config(state):
             abort(409,description='La configuración cambió. Recargá antes de guardar.')
+        validate_inventory_catalogue(cfg)
+        old={c['id']:c for c in state['config']['stock_components']}
+        for c in cfg['stock_components']:
+            if c['id'] in old and c['unit']!=old[c['id']]['unit'] and any(l['component_id']==c['id'] for l in state['component_lots'].values()):
+                raise ValueError('El insumo tiene stock: para cambiar de unidad, creá otro artículo')
+        reconcile_prices(state['config'],cfg)
         audit(state,'configuración',actor(),before=state['config'],after=cfg)
         state['config']=cfg
     return jsonify(ok=True)
+
+
+@bp.post('/api/component-lots')
+def component_entry():
+    data=body()
+    with transaction() as state:
+        cfg=config(state)
+        c=next((c for c in cfg['stock_components'] if c['id']==data.get('component_id') and c.get('active',True) and not c.get('deleted')),None)
+        if not c:raise ValueError('Elegí un insumo activo')
+        qty=num(data.get('quantity'),'Cantidad de entrada',0.000001,1e8)
+        lot=dict(id='ins-lote-'+uuid.uuid4().hex[:12],component_id=c['id'],quantity=qty,unit=c['unit'],location=text(data.get('location',''),150),origin=text(data.get('origin',''),200),revision=1)
+        state['component_lots'][lot['id']]=lot;c['track_stock']=True
+        state['movements'].append(dict(at=now(),actor=actor(),event='entrada',lot_id=lot['id'],quantity=qty,unit=lot['unit']))
+        audit(state,'entrada de insumo',actor(),lot=lot)
+        return jsonify(lot=lot)
+
+
+@bp.post('/api/component-lots/<ident>')
+def component_adjust(ident):
+    data=body()
+    with transaction() as state:
+        config(state)
+        lot=state['component_lots'].get(ident)
+        if not lot:abort(404)
+        if data.get('revision')!=lot['revision']:abort(409,description='El lote cambió; recargá antes de ajustar')
+        reason=text(data.get('reason',''),300)
+        if not reason:raise ValueError('Indicá el motivo del ajuste')
+        qty=num(data.get('quantity'),'Cantidad',0,1e8)
+        reserved=lot['quantity']-component_available(state,lot)
+        if qty<reserved:raise ValueError('La cantidad no puede ser menor a la reserva vigente')
+        before=deepcopy(lot);lot.update(quantity=qty,location=text(data.get('location',''),150),revision=lot['revision']+1)
+        state['movements'].append(dict(at=now(),actor=actor(),event='ajuste',lot_id=ident,quantity=qty-before['quantity'],unit=lot['unit'],reason=reason))
+        audit(state,'ajuste de insumo',actor(),before=before,after=lot,reason=reason)
+        return jsonify(lot=lot)
+
+
+@bp.get('/api/inventory/export')
+def inventory_export():
+    from inventory_excel import export_inventory
+    scope=request.args.get('scope','todo');template=request.args.get('template')=='1'
+    with transaction() as state:
+        config(state)
+        raw=export_inventory(state,scope,template)
+    return send_file(BytesIO(raw),mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',as_attachment=True,
+                     download_name=('plantilla-' if template else '')+'baron-'+scope+'.xlsx')
+
+
+def inventory_signer():
+    return URLSafeTimedSerializer(current_app.secret_key,salt='baron-inventory-import-v1')
+
+
+@bp.post('/api/inventory/import/preview')
+def inventory_import_preview():
+    owner()
+    from inventory_excel import read_inventory,apply_inventory,fingerprint
+    file=request.files.get('file')
+    if not file:raise ValueError('Seleccioná un archivo Excel')
+    scope=request.form.get('scope','todo')
+    rows=read_inventory(file.read(3_000_001),file.filename or '',scope)
+    with transaction() as state:
+        config(state);before=fingerprint(state)
+        simulated=deepcopy(state)
+        changes=apply_inventory(simulated,rows,actor())
+        token=inventory_signer().dumps(dict(rows=rows,fingerprint=before,actor=actor()))
+    return jsonify(token=token,changes=changes[:200],count=len(changes),truncated=len(changes)>200)
+
+
+@bp.post('/api/inventory/import/commit')
+def inventory_import_commit():
+    owner()
+    from inventory_excel import apply_inventory,fingerprint
+    try:plan=inventory_signer().loads(body().get('token',''),max_age=3600)
+    except BadSignature:raise ValueError('La vista previa venció o es inválida. Volvé a subir el Excel')
+    if plan.get('actor')!=actor():abort(403)
+    with transaction() as state:
+        config(state)
+        if plan['fingerprint']!=fingerprint(state):abort(409,description='El stock o catálogo cambió. Generá otra vista previa antes de aplicar')
+        before=dict(config=deepcopy(state['config']),lots=deepcopy(state['lots']),component_lots=deepcopy(state['component_lots']))
+        changes=apply_inventory(state,plan['rows'],actor())
+        audit(state,'importar Excel',actor(),before=before,changes=changes)
+    return jsonify(ok=True,count=len(changes))
 
 
 @bp.post('/api/preferences')

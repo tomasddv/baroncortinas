@@ -19,8 +19,8 @@ function renderSettings(){
  const tubes=section('Caños y sistemas','Precio del caño por metro, sistema por cortina y tela adicional en centímetros.');
  for(const size of ['32','42','45','58']){const box=el('div',{class:'settings-item settings-tube','data-tube':size},[el('h3',{text:'Caño '+size+' mm'})]),fields=el('div',{class:'grid'});for(const[key,label]of [['price_m','Precio del caño por metro'],['system_price','Precio del sistema por cortina'],['extra_cm','Tela adicional de alto cm']])fields.append(configField(label,cfg.tubes[size],key,'number',null,{required:true,max:100000000}));box.append(fields);tubes.append(box);}
  const fabrics=section('Telas y colores','Editá precios, anchos y colores. Desactivar una tela conserva su registro y los presupuestos anteriores.');
- const materialList=el('div');fabrics.append(materialList);
- function drawMaterials(){materialList.replaceChildren();for(const m of cfg.materials){
+ let showDeleted=false;const materialList=el('div');fabrics.append(check('Mostrar telas eliminadas',false,c=>{showDeleted=c.checked;drawMaterials();}),materialList);
+ function drawMaterials(){materialList.replaceChildren();for(const m of cfg.materials.filter(m=>showDeleted||!m.deleted)){
   const summary=el('summary',{text:m.name+(m.active===false?' · Inactiva':'')}),box=el('details',{class:'settings-material settings-item','data-material-id':m.id},[summary]),fields=el('div',{class:'grid'});
   fields.append(field('Nombre de tela',m.name,v=>{m.name=v;summary.textContent=v+(m.active===false?' · Inactiva':'');settingsChanged();},null,'text',{required:true,maxLength:100}));
   fields.append(configField('Tipo de tela',m,'family','text',[['sunscreen','Screen'],['blackout','Blackout'],['traslucida','Traslúcida'],['tela','Tela tradicional']],{required:true}));
@@ -35,7 +35,7 @@ function renderSettings(){
    const special=el('input',{type:'number',min:0,step:'any',value:c.price_override??'','aria-label':'Precio especial del color',placeholder:'Usar precio de tela',oninput:()=>{if(special.value==='')delete c.price_override;else c.price_override=Number(special.value);settingsChanged();}});
    row.append(el('label',{},[document.createTextNode('Precio especial del color'),special,el('small',{class:'muted',text:'Vacío: usa el precio de la tela.'})]));colors.append(row);
   }}drawColors();
-  box.append(el('button',{type:'button',class:'secondary',text:'＋ Agregar color',onclick:()=>{m.colors.push({id:'color-'+crypto.randomUUID().slice(0,12),name:'Nuevo color',hex:'#f6f4ee'});settingsChanged();drawColors();}}));materialList.append(box);
+  box.append(el('button',{type:'button',class:'secondary',text:'＋ Agregar color',onclick:()=>{m.colors.push({id:'color-'+crypto.randomUUID().slice(0,12),name:'Nuevo color',hex:'#f6f4ee'});settingsChanged();drawColors();}}));box.append(el('button',{type:'button',class:m.deleted?'secondary':'danger',text:m.deleted?'Recuperar tela':'Eliminar tela',onclick:()=>{if(!m.deleted&&!confirm('¿Eliminar esta tela del catálogo? Se conservarán su stock y presupuestos anteriores.'))return;m.deleted=!m.deleted;m.active=!m.deleted;settingsChanged();drawMaterials();}}));materialList.append(box);
  }}drawMaterials();
  fabrics.append(el('button',{type:'button',class:'secondary',text:'＋ Agregar tela',onclick:()=>{cfg.materials.push({id:'mat-'+crypto.randomUUID().slice(0,12),name:'Nueva tela',family:'sunscreen',price:0,price_unit:'m2',roll_width_cm:280,colors:[],active:true});settingsChanged();drawMaterials();materialList.lastElementChild.open=true;}}));
  const extras=section('Zócalos, cadenas y soportes','Los zócalos se cobran por metro de ancho; cadenas y soportes, por cortina. Los nombres guardados se conservan para los pedidos existentes.');
@@ -44,6 +44,7 @@ function renderSettings(){
   function drawExtras(){rows.replaceChildren();if(!extraDraft[key].length)rows.append(el('p',{class:'muted',text:'No hay adicionales configurados.'}));for(const item of extraDraft[key]){const row=el('div',{class:'settings-extra grid'});row.append(configField('Nombre del adicional',item,'name','text',null,{required:true,maxLength:100,readOnly:item.existing}));row.append(configField('Precio del adicional',item,'price','number',null,{required:true}));if(!item.existing)row.append(el('button',{type:'button',class:'danger',text:'Quitar nuevo adicional',onclick:()=>{extraDraft[key]=extraDraft[key].filter(x=>x!==item);settingsChanged();drawExtras();}}));rows.append(row);}}
   drawExtras();box.append(rows,el('button',{type:'button',class:'secondary',text:'＋ Agregar '+label.toLowerCase(),onclick:()=>{extraDraft[key].push({name:'',price:0,existing:false});settingsChanged();drawExtras();}}));extras.append(box);
  }
+ renderInventoryCatalogue(cfg,section);
  const brand=section('Datos de BARÓN','Estos datos aparecen en el presupuesto del cliente.'),brandGrid=el('div',{class:'grid'});
  for(const[key,label]of [['brand','Nombre del comercio'],['tagline','Descripción del comercio'],['whatsapp','Teléfono / WhatsApp'],['email','Email'],['address','Dirección']])brandGrid.append(configField(label,cfg.brand,key,'text',null,{maxLength:500}));brand.append(brandGrid);
 }
