@@ -169,12 +169,19 @@ def security_headers(response):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'; media-src 'self' https:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    if request.endpoint=='internal.official_preview':
+        response.headers['X-Frame-Options']='SAMEORIGIN'
+        response.headers['Content-Security-Policy']=response.headers['Content-Security-Policy'].replace("frame-ancestors 'none'","frame-ancestors 'self'")
     if request.path.startswith(('/admin','/api/','/cotizar/')) or request.path=='/carrito':
         response.headers["Cache-Control"] = "no-store"
     return response
 
 @app.before_request
 def admin_guards():
+    from access import live_session
+    live_session()
+    if session.get('role')=='staff' and not (request.path.startswith(('/admin/operativo','/static/','/media/')) or request.path in ('/admin/login','/admin/salir','/tema.css','/health')):
+        abort(403)
     private_legacy = request.path.startswith(('/cotizar/', '/api/')) or request.path == '/carrito'
     if private_legacy and not admin_ok():
         abort(401)
@@ -183,7 +190,7 @@ def admin_guards():
         expected = session.get("csrf", "")
         if not expected or not hmac.compare_digest(provided, expected):
             abort(403)
-    if session.get('role') == 'staff' and request.path.startswith('/admin') and not request.path.startswith('/admin/interno') and request.path not in ('/admin/salir',):
+    if session.get('role') == 'staff' and request.path.startswith('/admin') and not request.path.startswith('/admin/operativo') and request.path not in ('/admin/salir','/admin/login'):
         abort(403)
     if request.path.startswith("/admin") and request.path not in ("/admin/login",) and not admin_ok():
         return redirect(url_for("admin_login", next=request.path))
@@ -302,26 +309,19 @@ def material_image(key):
 @app.route("/admin/login",methods=["GET","POST"])
 def admin_login():
     if request.method=="POST":
-        expected=os.environ.get("ADMIN_PASSWORD","")
-        given=request.form.get("password", "")
-        if expected and hmac.compare_digest(given,expected):
+        from access import authenticate
+        record=authenticate(request.form.get('username','').strip(),request.form.get('password',''))
+        if record:
             session.clear()
-            session["admin_auth"]=True
-            session['role']='owner'
-            session['user']='dueño'
+            session.update(admin_auth=True,user=record['username'],role=record['role'],version=record['version'])
             csrf_token()
-            return redirect(url_for('internal.workspace'))
-        from werkzeug.security import check_password_hash
-        users=json.loads(os.environ.get('STAFF_USERS_JSON','{}'))
-        username=request.form.get('username','').strip()
-        record=users.get(username,{})
-        if record.get('password_hash') and check_password_hash(record['password_hash'],given):
-            session.clear()
-            session.update(admin_auth=True,role='staff',user=username)
-            csrf_token()
-            return redirect(url_for('internal.workspace'))
+            return redirect('/admin/operativo/' if record['role']=='staff' else url_for('internal.workspace'))
         flash("Contraseña incorrecta o ADMIN_PASSWORD no configurada", "error")
-    return render_template("login.html",configured=bool(os.environ.get("ADMIN_PASSWORD")))
+    from access import initialize
+    from private_store import transaction
+    with transaction() as state:
+        configured=bool(os.environ.get('ADMIN_PASSWORD') or initialize(state))
+    return render_template("login.html",configured=configured)
 
 @app.post("/admin/salir")
 def logout():
@@ -522,6 +522,9 @@ def material_delete(material_id):
 @app.errorhandler(413)
 def too_large(_):
     return "Archivo demasiado grande: máximo 3 MB por solicitud",413
+
+from operational import bp as operational_bp
+app.register_blueprint(operational_bp)
 
 if os.environ.get('BARON_DEMO_STOCK')=='1':
     from demo_data import prepare_demo

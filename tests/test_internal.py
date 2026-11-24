@@ -165,6 +165,9 @@ def test_multipage_exports(client):
 def test_private_routes_csrf_and_staff(client):
     assert client.post('/admin/interno/api/orders',json=draft()).status_code==403
     with client.session_transaction() as s: s['role']='staff'
+    with transaction() as state:
+        state['users']={'test-owner':dict(username='test-owner',role='staff',enabled=True,version=1,permissions=[])}
+    with client.session_transaction() as s: s['version']=1
     assert post(client,'/config',{}).status_code==403
     assert client.get('/admin/exportar').status_code==403
     assert client.get('/admin/interno/api/backup').status_code==403

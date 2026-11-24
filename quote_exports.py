@@ -57,16 +57,17 @@ def xlsx(order,columns,bom=False,reservations=()):
         for row in commercial_rows(order):
             sheet.append([safe(row[k]) for k in columns])
         sheet.append([])
-        sheet.append(['Subtotal',order['subtotal']])
-        sheet.append(['Descuento %',order['discount_pct']])
+        if not order.get('government'):
+            sheet.append(['Subtotal',order['subtotal']])
+            sheet.append(['Descuento %',order['discount_pct']])
         if order.get('happy_adjustment_pct'):
             sheet.append(['Ajuste comercial incluido %',order['happy_adjustment_pct']])
-        sheet.append(['Total',order['total']])
+        if not order.get('government'):sheet.append(['Total',order['total']])
         for k,v in order['payments'].items():
             sheet.append([k,v])
-        sheet.append(['Observaciones',safe(order['notes'])])
+        if order.get('notes'):sheet.append(['Observaciones',safe(order['notes'])])
         brand=order['price_snapshot']['brand']
-        sheet.append(['Contacto',safe(brand.get('whatsapp','')),safe(brand.get('email',''))])
+        sheet.append(['Ventas','280 50 111 99','Administración','280 49 713 41','ventas@barondeco.com.ar'])
     for ws in book:
         ws.freeze_panes='A6' if ws==sheet else 'A2'
         ws.sheet_view.showGridLines=False
@@ -95,60 +96,44 @@ def xlsx(order,columns,bom=False,reservations=()):
 
 
 def pdf(order,columns):
-    output=BytesIO()
-    brand=order['price_snapshot']['brand']
-    logo=None
-    if brand.get('brand_logo'):
-        try:
-            logo=ImageReader(BytesIO(read_image(brand['brand_logo'])))
-        except (OSError,ValueError,RuntimeError):
-            pass
-    page_width,page_height=A4
+    from pathlib import Path
+    output=BytesIO();page_width,page_height=A4
+    background=ImageReader(str(Path(__file__).parent/'static'/'brand'/'presupuesto-oficial.png'))
+    def date_label(value):
+        from datetime import date
+        return date.fromisoformat(value).strftime('%d/%m/%Y') if value else ''
     def decorate(canvas,doc):
-        canvas.saveState()
-        canvas.setFillColor(colors.HexColor(BLUE))
-        canvas.rect(page_width-240,page_height-48,240,48,fill=1,stroke=0)
-        canvas.setFillColor(colors.white);canvas.setFont('Helvetica-Bold',17)
-        canvas.drawString(page_width-222,page_height-31,'PRESUPUESTO')
-        if logo:
-            canvas.drawImage(logo,35,page_height-112,width=100,height=70,preserveAspectRatio=True,mask='auto')
-            canvas.saveState();canvas.setFillAlpha(.045)
-            canvas.drawImage(logo,page_width-220,75,width=180,height=180,preserveAspectRatio=True,mask='auto')
-            canvas.restoreState()
-        else:
-            canvas.setFillColor(colors.HexColor(BLUE));canvas.drawString(35,page_height-80,brand.get('brand','BARÓN'))
-        canvas.setFillColor(colors.HexColor(BLUE));canvas.rect(0,0,page_width,47,fill=1,stroke=0)
-        canvas.setFillColor(colors.white);canvas.setFont('Helvetica',9)
-        contact=' · '.join(str(brand[k]) for k in ('whatsapp','email','address') if brand.get(k))
-        canvas.drawString(35,27,contact[:100])
-        canvas.drawString(35,12,brand.get('brand','BARÓN'))
-        canvas.drawRightString(page_width-30,12,f'Página {doc.page}')
+        canvas.saveState();canvas.drawImage(background,0,0,width=page_width,height=page_height)
+        accessible=canvas.beginText(page_width-145,page_height-25);accessible.setFont('Helvetica-Bold',16);accessible.setTextRenderMode(3);accessible.textLine('PRESUPUESTO');accessible.setTextRenderMode(0);canvas.drawText(accessible)
+        canvas.setFillColor(colors.black);canvas.setFont('Helvetica-Bold',9)
+        canvas.drawString(377,page_height-133,'N° Presupuesto:')
+        canvas.drawString(377,page_height-145,'Fecha desde:')
+        canvas.drawString(377,page_height-157,'Válido hasta:')
+        canvas.setFont('Helvetica',9)
+        canvas.drawString(452,page_height-133,order['number'])
+        canvas.drawString(444,page_height-145,date_label(order['date']))
+        canvas.drawString(448,page_height-157,date_label(order['valid_until']))
+        canvas.setFont('Helvetica',7);canvas.drawString(72,76,f'Página {doc.page}')
         canvas.restoreState()
-    style=ParagraphStyle('cell',fontName='Helvetica',fontSize=8,leading=11,textColor=colors.HexColor('#162334'),wordWrap='CJK')
-    heading=ParagraphStyle('head',parent=style,fontName='Helvetica-Bold',fontSize=11,leading=15)
-    white=ParagraphStyle('white',parent=style,textColor=colors.white,fontName='Helvetica-Bold')
-    def para(value,sty=style):
-        return Paragraph(escape(str(value)).replace('\n','<br/>'),sty)
-    story=[para(order['number'],heading),para('Fecha: '+order['date']+' · Válido hasta: '+order['valid_until']),
-           para('Cliente: '+order['customer']+' · '+order['city']),Spacer(1,18)]
-    if order.get('mentirita'):
-        story.extend([para(client_measurement_note(order)),Spacer(1,10)])
-    data=[[para(COLUMNS[k]+(' cm' if k.endswith('_cm') else ''),white) for k in columns]]
-    for row in commercial_rows(order):
-        data.append([para(currency(row[k]) if k in ('unit_price','subtotal') else row[k]) for k in columns])
-    weights={'detail':2.5,'material':1.5,'room':1.2,'quantity':.65,'width_cm':.9,'height_cm':.9,'color':1.1,'unit_price':1.25,'subtotal':1.25}
+    style=ParagraphStyle('cell',fontName='Helvetica',fontSize=7.5,leading=10,textColor=colors.black,wordWrap='LTR')
+    heading=ParagraphStyle('head',parent=style,fontName='Helvetica-Bold',fontSize=10,leading=14)
+    def para(value,sty=style):return Paragraph(escape(str(value)).replace('\n','<br/>'),sty)
+    story=[para('Cliente: '+order['customer']+' · '+order['city']),Spacer(1,7)]
+    if order.get('mentirita'):story.extend([para(client_measurement_note(order)),Spacer(1,5)])
+    data=[[para(COLUMNS[k],ParagraphStyle('th',parent=style,fontName='Helvetica-Bold')) for k in columns]]
+    for row in commercial_rows(order):data.append([para(currency(row[k]) if k in ('unit_price','subtotal') else row[k]) for k in columns])
+    weights={'detail':2.5,'material':1.5,'room':1.2,'quantity':1.0,'width_cm':.9,'height_cm':.9,'color':1.1,'unit_price':1.25,'subtotal':1.25}
     total=sum(weights[k] for k in columns)
-    table=Table(data,colWidths=[(page_width-60)*weights[k]/total for k in columns],repeatRows=1,hAlign='LEFT')
-    table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(BLUE)),('VALIGN',(0,0),(-1,-1),'TOP'),
-        ('GRID',(0,0),(-1,-1),.4,colors.HexColor('#cbd4de')),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]))
-    story.extend([table,Spacer(1,18),para(f'Subtotal: $ {currency(order["subtotal"])} · Descuento: {order["discount_pct"]:g}%')])
-    if order.get('happy_adjustment_pct'):
-        story.append(para(f'Ajuste comercial incluido: {order["happy_adjustment_pct"]:g}%'))
-    for name,value in order['payments'].items():
-        story.append(para(f'{name}: $ {currency(value)}',heading))
-    if order['notes']:
-        story.extend([Spacer(1,12),para(order['notes'])])
-    SimpleDocTemplate(output,pagesize=A4,leftMargin=30,rightMargin=30,topMargin=130,bottomMargin=70).build(story,onFirstPage=decorate,onLaterPages=decorate)
+    table=Table(data,colWidths=[(page_width-144)*weights[k]/total for k in columns],repeatRows=1,hAlign='LEFT')
+    table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#d3d3d3')),('VALIGN',(0,0),(-1,-1),'TOP'),
+        ('GRID',(0,0),(-1,-1),.55,colors.HexColor('#555555')),('LEFTPADDING',(0,0),(-1,-1),3),('RIGHTPADDING',(0,0),(-1,-1),3),('TOPPADDING',(0,0),(-1,-1),7),('BOTTOMPADDING',(0,0),(-1,-1),7)]))
+    story.extend([table,Spacer(1,18)])
+    labels={'Transferencia':'Total transferencia','Efectivo':'Pago Efectivo','Tarjeta':'Pago con Tarjeta','TOTAL PRESUPUESTO':'TOTAL PRESUPUESTO'}
+    for payment_index,(name,value) in enumerate(order['payments'].items()):
+        t=Table([[para(labels.get(name,name)+':',heading),para('$ '+currency(value),heading)]],colWidths=[140,80],hAlign='RIGHT')
+        t.setStyle(TableStyle([('ALIGN',(1,0),(1,0),'RIGHT'),*(([('LINEABOVE',(0,0),(-1,0),.6,colors.black)]) if payment_index==0 else []),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6)]));story.append(t)
+    if order.get('notes'):story.extend([Spacer(1,12),para('Observaciones',heading),para(order['notes'])])
+    SimpleDocTemplate(output,pagesize=A4,leftMargin=72,rightMargin=72,topMargin=190,bottomMargin=185).build(story,onFirstPage=decorate,onLaterPages=decorate)
     return output.getvalue()
 
 
@@ -164,7 +149,7 @@ def export_file(order,columns,kind,reservations=()):
     doc=pymupdf.open(stream=raw,filetype='pdf')
     pages=[]
     for p in doc:
-        pix=p.get_pixmap(matrix=pymupdf.Matrix(1.7,1.7),alpha=False)
+        pix=p.get_pixmap(matrix=pymupdf.Matrix(300/72,300/72),alpha=False)
         pages.append(pix.tobytes('jpeg' if kind=='jpg' else 'png'))
     doc.close()
     if len(pages)==1:

@@ -78,9 +78,9 @@ def preview():
     with transaction() as state:
         cfg = config(state)
         old=order_in(state,data['id']) if data.get('id') else None
-        same=old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct']
+        same=old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct'] and (data.get('government') is True)==old.get('government',False) and (not old.get('government') or float(data.get('government_total',0))==old.get('government_total'))
         order = quote_order(data,old['price_snapshot'] if same and not data.get('reprice') else cfg)
-        if old:
+        if old and not order.get('government'):
             order['happy_rate_snapshot']=old.get('happy_rate_snapshot',cfg['happy_markup_pct']) if not data.get('reprice') else cfg['happy_markup_pct']
             apply_price_choice(order,old.get('price_choice','normal'))
         return jsonify(order=order,rows=commercial_rows(order),warnings=stock_warnings(state,order,cfg))
@@ -97,14 +97,14 @@ def save_order():
         if old and old['status']!='presupuesto':
             raise ValueError('Volvé a presupuesto para editar. Los pedidos con consumo se duplican para un nuevo trabajo.')
         # Unchanged group saves retain quoted prices even after catalogue updates.
-        same = old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct']
+        same = old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct'] and (data.get('government') is True)==old.get('government',False) and (not old.get('government') or float(data.get('government_total',0))==old.get('government_total'))
         if same and not data.get('reprice'):
             order = deepcopy(old)
-            for key,limit in [('customer',150),('city',150),('date',10),('valid_until',10),('notes',2000)]:
+            for key,limit in [('customer',150),('city',150),('date',10),('valid_until',10),('notes',10000),('contact',300),('technical_notes',4000)]:
                 order[key]=text(data.get(key,''),limit)
         else:
             order = quote_order(data,cfg)
-            if old:
+            if old and not order.get('government'):
                 order['happy_rate_snapshot']=old.get('happy_rate_snapshot',cfg['happy_markup_pct']) if not data.get('reprice') else cfg['happy_markup_pct']
                 apply_price_choice(order,old.get('price_choice','normal'))
         order['mentirita']=data.get('mentirita') is True
@@ -409,3 +409,56 @@ def export(ident,kind):
         columns=state['preferences'].get(actor(),list(COLUMNS))
         content,mime,extension=export_file(order,columns,kind,[r for r in state['reservations'] if r['order_id']==ident])
         return send_file(BytesIO(content),mimetype=mime,as_attachment=True,download_name=order['number']+'.'+extension)
+
+
+@bp.get('/api/users')
+def users_list():
+    owner()
+    from access import initialize,public_user,PERMISSIONS
+    with transaction() as state:
+        return jsonify(users=[public_user(u) for u in initialize(state).values()],permissions=PERMISSIONS,current_user=actor())
+
+@bp.post('/api/users')
+def users_save():
+    owner()
+    from access import write_user
+    with transaction() as state:
+        user=write_user(state,body(),actor())
+    return jsonify(user=user)
+
+
+@bp.get('/api/orders/<ident>/preview')
+def official_preview(ident):
+    from quote_exports import pdf
+    import pymupdf
+    from flask import Response
+    with transaction() as state:
+        order=order_in(state,ident)
+        raw=pdf(order,state['preferences'].get(actor(),list(COLUMNS)))
+        with pymupdf.open(stream=raw,filetype='pdf') as doc:count=len(doc)
+    images=''.join(f'<img alt="Página {i+1}" src="{request.path}/{i+1}.png?revision={order["revision"]}" width="100%">' for i in range(count))
+    return Response('<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Presupuesto BARÓN</title><link rel="stylesheet" href="/static/official-preview.css"></head><body>'+images+'</body></html>',mimetype='text/html')
+
+@bp.get('/api/orders/<ident>/preview/<int:page>.png')
+def official_page(ident,page):
+    from quote_exports import pdf
+    import pymupdf
+    with transaction() as state:
+        raw=pdf(order_in(state,ident),state['preferences'].get(actor(),list(COLUMNS)))
+    with pymupdf.open(stream=raw,filetype='pdf') as doc:
+        if not 1<=page<=len(doc):abort(404)
+        raw=doc[page-1].get_pixmap(matrix=pymupdf.Matrix(1.5,1.5),alpha=False).tobytes('png')
+    return send_file(BytesIO(raw),mimetype='image/png')
+
+
+@bp.get('/api/activity')
+def activity():
+    owner()
+    kind=request.args.get('kind','stock');q=request.args.get('q','').casefold()
+    offset=int(num(request.args.get('offset',0),'Posición',0,1e9))
+    with transaction() as state:
+        if kind=='stock':items=state.get('stock_history',[])
+        elif kind=='users':items=[{k:a.get(k) for k in ('at','actor','action','order_id','username')} for a in state['audit']]
+        else:raise ValueError('Historial inválido')
+        items=[item for item in reversed(items) if q in ' '.join(str(v) for v in item.values()).casefold()]
+        return jsonify(items=items[offset:offset+100],total=len(items),offset=offset)

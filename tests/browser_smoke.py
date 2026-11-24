@@ -72,9 +72,9 @@ with sync_playwright() as p:
     assert page.locator('body').evaluate('(e)=>e.scrollWidth <= innerWidth')
     page.screenshot(path=str(OUT/'despiece-mobile.png'),full_page=True)
     page.get_by_role('button',name='Presupuesto cliente',exact=True).click()
-    assert page.locator('#client-preview .client-row').count()==2
-    assert '10 cm de margen' in page.locator('#client-preview').inner_text()
-    assert '160 cm' in page.locator('#client-preview').inner_text()
+    frame=page.frame_locator('#client-preview iframe')
+    frame.locator('img').first.wait_for()
+    assert frame.locator('img').count()>=1
     page.screenshot(path=str(OUT/'presupuesto-mobile.png'),full_page=True)
     page.set_viewport_size({'width':1440,'height':1000})
     page.get_by_role('button',name='Despiece',exact=True).click()
