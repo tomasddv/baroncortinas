@@ -18,7 +18,7 @@ aprobar los cambios.
 ## Migración y respaldo
 
 La primera transacción crea de forma aditiva `baron_state_backups` y copia en ella
-el payload completo previo a migrar. La copia y el cambio de esquema de 1 a 2 se
+el payload completo previo a migrar. La copia y el cambio de esquema previo a 3 se
 confirman juntos. Se agregan `users` y `stock_history`, sin reescribir pedidos,
 precios, lotes ni reservas. DDL protegido por advisory lock PostgreSQL para evitar
 carreras entre workers. No hay borrados de tablas o columnas ni cargas de ejemplo.
@@ -40,7 +40,7 @@ no necesita restaurar datos, ya que la migración es aditiva.
 ## Primer dueño y variables
 
 Se conserva `ADMIN_PASSWORD` como credencial de inicialización. Variable opcional
-nueva: `ADMIN_USERNAME` (por defecto `dueno`). Abrir `/admin/login`, ingresar ese
+nueva: `ADMIN_USERNAME` (por defecto `LUCAS`). Abrir `/admin/login`, ingresar ese
 usuario y la contraseña ya configurada. Si todavía no existe un dueño persistido,
 se crea una cuenta con hash scrypt de Werkzeug. Por compatibilidad se admite
 usuario vacío únicamente durante esa inicialización. Después, usar siempre el
@@ -158,8 +158,33 @@ respaldo antes de migración, persistencia y móvil/escritorio.
   `tests/browser_smoke.py`, `tests/browser_upgrade.py`, `.github/workflows/tests.yml`.
 - Documentación: este archivo.
 
-Resultado local: 44 pruebas aprobadas y una prueba PostgreSQL omitida por falta de
+Resultado local: 47 pruebas aprobadas y una prueba PostgreSQL omitida por falta de
 servicio local; dos recorridos Chrome de interfaz aprobados. La CI ejecuta también
 PostgreSQL 16 y ambos recorridos Chromium. No hay variables nuevas obligatorias ni
 cambios de dependencias. Si `dueno` ya existe como colaborador heredado, elegir
 otro `ADMIN_USERNAME` para inicializar al dueño sin sobrescribir esa cuenta.
+
+
+## Ajuste operativo: selección y realización por cortina
+
+El dueño heredado `dueno` se renombra a `LUCAS`, conservando ID, hash de contraseña,
+permisos y datos. Se revocan las sesiones del nombre anterior. La migración de
+esquema 2 a 3 vuelve a respaldar el payload antes de cambios. No se sobrescribe una
+cuenta LUCAS existente si hay conflicto; debe resolverse conservando ambas cuentas.
+
+Las solapas del tablero operativo son paneles independientes, no anclas a una
+página larga. Pedidos y Despiece tienen desplegables de presupuesto aprobado y
+cortina, compartiendo la selección. Inicialmente no se selecciona ningún pedido;
+solo se muestra una cortina y su despiece. Excel desde ese panel exporta únicamente
+la cortina elegida; la URL sin selector mantiene la exportación completa.
+
+Realizada guarda usuario, fecha y una revisión individual por cortina. Repetir la
+marca no genera movimientos ni duplica reservas. Desmarcar exige confirmación.
+Una cortina realizada no admite cambios técnicos ni en el panel operativo ni en el
+editor del dueño, hasta reabrirla. Las modificaciones comerciales no la borran y
+una duplicación comienza sin marcas de realización. Al terminar todas, el pedido
+pasa a listo; no se puede marcar listo/entregado si falta una cortina.
+
+`tests/browser_operational.py` prueba dos pedidos, un borrador oculto, selección de
+una sola cortina, persistencia de Realizada, cancelación de reapertura, Excel
+individual y ausencia de otras solapas al hacer scroll, en móvil y escritorio.

@@ -107,6 +107,9 @@ def save_order():
             if old and not order.get('government'):
                 order['happy_rate_snapshot']=old.get('happy_rate_snapshot',cfg['happy_markup_pct']) if not data.get('reprice') else cfg['happy_markup_pct']
                 apply_price_choice(order,old.get('price_choice','normal'))
+        if old:
+            from production_progress import protect_completed
+            protect_completed(old,order)
         order['mentirita']=data.get('mentirita') is True
         order.setdefault('happy_rate_snapshot',cfg['happy_markup_pct'])
         if not order['customer']:
@@ -160,6 +163,7 @@ def duplicate(ident):
         state['sequence']+=1
         new_id=uuid.uuid4().hex
         order.update(id=new_id,number=f'BAR-{state["sequence"]:06d}',status='presupuesto',revision=1,created_at=now(),updated_at=now())
+        order.update(curtain_progress={},manufacturing_status='pendiente',manufacturing_revision=0)
         # A duplicate is a new job: no stock allocations or inherited remnant selection.
         for line in order['bom']:
             line.pop('remnant_id',None)
@@ -220,6 +224,8 @@ def save_bom(ident):
         # Exactly one fabric allocation per curtain; cannot bypass stock by deleting it.
         if sorted(l['curtain'] for l in clean if l.get('fabric')) != [i+1 for i,u in enumerate(order['units']) if u.get('material_id')]:
             raise ValueError('Conservá una línea física de tela por cortina')
+        from production_progress import protect_completed
+        protect_completed(order,dict(order,bom=clean))
         audit(state,'editar despiece',actor(),order_id=ident,before=order['bom'],after=clean)
         order['bom']=clean
         order['revision']+=1

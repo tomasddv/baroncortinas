@@ -19,6 +19,12 @@ def initialize(state):
             if name not in users and record.get('password_hash'):
                 users[name]=dict(id=uuid.uuid4().hex,username=name,role='staff',name=name,password_hash=record['password_hash'],enabled=True,version=1,permissions=list(DEFAULTS))
         state['legacy_users_imported']=now()
+    desired=os.environ.get('ADMIN_USERNAME','LUCAS')
+    if desired=='LUCAS' and 'dueno' in users and users['dueno']['role']=='owner':
+        if 'LUCAS' in users:raise ValueError('Ya existe un usuario LUCAS; no se sobrescribe ninguna cuenta')
+        user=users.pop('dueno');user.update(username='LUCAS',name='Lucas',version=user.get('version',0)+1)
+        users['LUCAS']=user
+        audit(state,'renombrar dueño','sistema',before_username='dueno',username='LUCAS')
     return users
 
 def authenticate(username,password):
@@ -29,7 +35,7 @@ def authenticate(username,password):
         if not any(u['role']=='owner' for u in users.values()):
             expected=os.environ.get('ADMIN_PASSWORD','')
             import hmac
-            ownername=os.environ.get('ADMIN_USERNAME','dueno')
+            ownername=os.environ.get('ADMIN_USERNAME','LUCAS')
             if ownername not in users and username in ('',ownername) and expected and hmac.compare_digest(password.encode(),expected.encode()):
                 record=dict(id=uuid.uuid4().hex,username=ownername,name='Dueño',role='owner',enabled=True,version=1,permissions=list(PERMISSIONS),password_hash=generate_password_hash(password))
                 users[ownername]=record;audit(state,'crear dueño inicial',ownername)

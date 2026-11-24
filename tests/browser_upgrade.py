@@ -64,17 +64,21 @@ with sync_playwright() as p:
     op=staff.new_page();op.on('pageerror',lambda e:errors.append(str(e)))
     op.goto(BASE+'/admin/login');op.locator('input[name=username]').fill('colaborador-ui');op.locator('input[name=password]').fill('clave-ui-colaborador');op.get_by_role('button',name='Ingresar',exact=False).click()
     op.get_by_role('heading',name='Tablero de trabajo',exact=True).wait_for()
+    op.locator('#op-order-selector').get_by_label('Seleccionar presupuesto aprobado',exact=True).select_option(o['id'])
+    op.locator('#op-order-selector').get_by_label('Seleccionar cortina',exact=True).select_option('1')
     op.get_by_role('heading',name=o['number']+' · Organismo UI',exact=True).wait_for()
     assert '5000' not in op.locator('body').inner_text()
     assert op.request.get(BASE+'/admin/interno/api/state').status==403
-    op.get_by_text('Despiece de fabricación',exact=True).click()
+    op.get_by_role('tab',name='Despiece',exact=True).click()
     assert op.get_by_role('link',name='Exportar despiece Excel',exact=True).count()==1
     assert op.locator('body').evaluate('(e)=>e.scrollWidth<=innerWidth')
+    op.get_by_role('tab',name='Stock',exact=True).click()
     entry=op.locator('form').filter(has=op.get_by_role('heading',name='Entrada de artículos',exact=True))
     entry.get_by_label('Cantidad',exact=True).fill('5')
     with op.expect_response(lambda r:r.url.endswith('/admin/operativo/api/component-lots') and r.request.method=='POST') as stock_entry:
         entry.get_by_role('button',name='Agregar stock',exact=True).click()
     assert stock_entry.value.status==200
+    op.get_by_role('tab',name='Pedidos aprobados',exact=True).click()
     op.get_by_label('Estado de fabricación',exact=True).select_option('en fabricación')
     with op.expect_response(lambda r:r.url.endswith('/manufacturing') and r.request.method=='POST') as stage:
         op.get_by_role('button',name='Guardar estado',exact=True).click()

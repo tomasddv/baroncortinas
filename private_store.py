@@ -59,11 +59,11 @@ def transaction():
         try:
             payload = conn.execute(select(state_table.c.payload).where(state_table.c.id == 1).with_for_update()).scalar_one()
             state = json.loads(payload)
-            if state.get('schema',1)<2:
+            if state.get('schema',1)<3:
                 # Backup and additive migration share the same commit/rollback.
                 conn.execute(backup_table.insert().values(payload=payload))
                 state.setdefault('users',{})
-                state['schema']=2
+                state['schema']=3
             before_stock={k:deepcopy(state.get(k,{})) for k in ("lots","component_lots")}
             yield state
             from stock_audit import record_changes

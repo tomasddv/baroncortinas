@@ -19,6 +19,8 @@ def approved(s,ident):
 def safe_order(o,permissions):
     result=select(o,('id','number','customer','city','date','revision','technical_notes','manufacturing_status','manufacturing_revision'))
     result['units']=[dict(select(u,UNIT_KEYS),system=' · '.join(l['name'] for l in o['bom'] if l['curtain']==i+1 and l['name'].startswith('Sistema'))) for i,u in enumerate(o['units'])]
+    from production_progress import progress
+    result['curtain_progress']={str(i):progress(o,i) for i in range(1,len(o['units'])+1)}
     if permissions['contacts']:result['contact']=o.get('contact','')
     if permissions['bom']:result['bom']=[select(l,BOM_KEYS) for l in o['bom']]
     return result
@@ -84,13 +86,24 @@ def export(ident):
     require('orders');require('bom');require('bom_export')
     from quote_exports import safe
     with transaction() as s:
-        o=approved(s,ident);book=Workbook();sheet=book.active;sheet.title='Despiece'
+        o=approved(s,ident)
+        curtain=None
+        if request.args.get('curtain') is not None:
+            value=num(request.args['curtain'],'Cortina',1,len(o['units']))
+            if value!=int(value):raise ValueError('Cortina inválida')
+            curtain=int(value)
+        book=Workbook();sheet=book.active;sheet.title='Despiece'
         sheet.append(['Pedido',safe(o['number']),'Cliente',safe(o['customer'])])
         keys=['curtain','name','quantity','unit','cut_width_cm','cut_height_cm','remnant_id']
         sheet.append(['Cortina','Material','Cantidad física','Unidad','Ancho corte cm','Alto corte cm','Retazo'])
-        for l in o['bom']:sheet.append([safe(l.get(k,'')) for k in keys])
-        tech=book.create_sheet('Cortinas');tech.append(list(UNIT_KEYS))
-        for u in o['units']:tech.append([safe(u.get(k,'')) for k in UNIT_KEYS])
+        for l in o['bom']:
+            if curtain is None or l['curtain']==curtain:sheet.append([safe(l.get(k,'')) for k in keys])
+        from production_progress import progress
+        tech=book.create_sheet('Cortinas');tech.append(['Cortina']+list(UNIT_KEYS)+['Realizada','Fecha','Usuario'])
+        for i,u in enumerate(o['units'],1):
+            if curtain is not None and curtain!=i:continue
+            done=progress(o,i)
+            tech.append([i]+[safe(u.get(k,'')) for k in UNIT_KEYS]+['Sí' if done['done'] else 'No',done['at'],safe(done['actor'])])
         stream=BytesIO();book.save(stream);stream.seek(0)
         return send_file(stream,as_attachment=True,download_name=o['number']+'-despiece.xlsx',mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 @bp.post('/api/orders/<ident>/manufacturing')
@@ -100,6 +113,9 @@ def manufacturing(ident):
     with transaction() as s:
         o=approved(s,ident)
         if data.get('revision',0)!=o.get('manufacturing_revision',0):abort(409)
+        from production_progress import progress
+        if data['status'] in ('listo','entregado') and not all(progress(o,i)['done'] for i in range(1,len(o['units'])+1)):
+            raise ValueError('Marcá cada cortina como realizada antes de indicar listo o entregado')
         before=o.get('manufacturing_status','pendiente');o['manufacturing_status']=data['status'];o['manufacturing_revision']=o.get('manufacturing_revision',0)+1
         audit(s,'estado de fabricación',session['user'],order_id=ident,before=before,after=data['status'])
     return jsonify(ok=True)
@@ -123,6 +139,8 @@ def edit_bom(ident):
                 l['quantity']=l['cut_width_cm']*l['cut_height_cm']/10000
             else:l['quantity']=num(change.get('quantity'),'Cantidad',0,1e8)
             clean.append(l)
+        from production_progress import protect_completed
+        protect_completed(o,dict(o,bom=clean))
         # Reassign reservations atomically. Failure restores original BOM and reservations.
         transition(s,o,'presupuesto',session['user']);o['bom']=clean
         transition(s,o,'aprobado',session['user'])
@@ -134,3 +152,27 @@ def compatible(ident):
     with transaction() as s:
         o=approved(s,ident)
         return jsonify({l['id']:[select(r,('id','width_cm','length_m','location')) for r in matches(s,l)] for l in o['bom'] if l.get('fabric')})
+
+
+@bp.post('/api/orders/<ident>/curtains/<int:curtain>/completion')
+def curtain_completion(ident,curtain):
+    require('orders');require('manufacturing')
+    from production_progress import progress
+    data=request.get_json() or {}
+    if not isinstance(data.get('done'),bool):raise ValueError('Indicá si la cortina está realizada')
+    with transaction() as s:
+        o=approved(s,ident)
+        if not 1<=curtain<=len(o['units']):abort(404)
+        current=progress(o,curtain)
+        if current['done']==data['done']:return jsonify(progress=current,unchanged=True)
+        if data.get('revision')!=current['revision']:abort(409)
+        if not data['done'] and data.get('confirm') is not True:
+            raise ValueError('Confirmá la reapertura de la cortina realizada')
+        value=dict(done=data['done'],revision=current['revision']+1,at=now(),actor=session['user'])
+        o.setdefault('curtain_progress',{})[str(curtain)]=value
+        o['revision']+=1;o['updated_at']=now()
+        complete=all(progress(o,i)['done'] for i in range(1,len(o['units'])+1))
+        o['manufacturing_status']='listo' if complete else ('en fabricación' if any(progress(o,i)['done'] for i in range(1,len(o['units'])+1)) else 'pendiente')
+        o['manufacturing_revision']=o.get('manufacturing_revision',0)+1
+        audit(s,'cortina realizada' if data['done'] else 'reabrir cortina realizada',session['user'],order_id=ident,curtain=curtain,before=current,after=value)
+        return jsonify(progress=value,unchanged=False)

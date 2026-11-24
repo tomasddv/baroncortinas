@@ -143,3 +143,62 @@ def test_password_reset_contact_permissions_and_persistence(client):
     from private_store import _engines
     for eng in list(_engines.values()):eng.dispose()
     assert fresh.get('/admin/operativo/api/state').json['orders'][0]['number']==o['number']
+
+
+def test_owner_rename_keeps_identity_password_and_revokes_old_session(client,monkeypatch):
+    from werkzeug.security import generate_password_hash
+    from access import initialize
+    monkeypatch.setenv('ADMIN_USERNAME','LUCAS')
+    hashed=generate_password_hash('misma-clave-1234')
+    with transaction() as s:
+        s['users']['dueno']=dict(id='owner-persistente',username='dueno',role='owner',name='Dueño',password_hash=hashed,version=3,enabled=True,permissions=list(PERMISSIONS))
+    stale=app.test_client()
+    with stale.session_transaction() as se:se.update(admin_auth=True,role='owner',user='dueno',version=3,csrf='stale')
+    assert stale.get('/admin/interno/api/state').status_code==302
+    with transaction() as s:
+        assert 'dueno' not in s['users']
+        u=s['users']['LUCAS'];assert u['id']=='owner-persistente' and u['password_hash']==hashed and u['version']==4
+        initialize(s);assert s['users']['LUCAS']['version']==4
+    fresh=app.test_client();fresh.get('/admin/login')
+    with fresh.session_transaction() as se:csrf=se['csrf']
+    assert fresh.post('/admin/login',data=dict(username='LUCAS',password='misma-clave-1234',csrf=csrf)).status_code==302
+    assert fresh.get('/admin/interno/api/state').status_code==200
+
+def test_curtain_completion_atomic_idempotent_and_reopen(client):
+    post(client,'/lots',dict(kind='rollo',material_id='excel-screen',color_id='blanco',length_m=50))
+    o=save(client,draft(2));post(client,'/orders/'+o['id']+'/status',dict(status='aprobado',revision=o['revision'],confirm=True))
+    c=collaborator(client,list(PERMISSIONS));path='/orders/'+o['id']+'/curtains/1/completion'
+    with transaction() as s:before=deepcopy({k:s[k] for k in ['lots','reservations','movements']})
+    r=op(c,path,dict(done=True,revision=0));assert r.status_code==200
+    assert op(c,path,dict(done=True,revision=0)).json['unchanged'] is True
+    with transaction() as s:
+        assert {k:s[k] for k in before}==before
+        assert s['orders'][o['id']]['curtain_progress']['1']['actor']=='operario'
+        assert s['orders'][o['id']]['manufacturing_status']=='en fabricación'
+    data=c.get('/admin/operativo/api/state').json['orders'][0]
+    assert data['curtain_progress']['1']['done'] and not data['curtain_progress']['2']['done']
+    lines=data['bom'];lines[0]['cut_height_cm']=220
+    assert op(c,'/orders/'+o['id']+'/bom',dict(lines=lines,revision=data['revision'])).status_code==400
+    assert op(c,path,dict(done=False,revision=1)).status_code==400
+    assert op(c,path,dict(done=False,revision=0,confirm=True)).status_code==409
+    assert op(c,path,dict(done=False,revision=1,confirm=True)).status_code==200
+    assert op(c,path,dict(done=True,revision=1)).status_code==409
+    assert op(c,path,dict(done=True,revision=2)).status_code==200
+    assert op(c,'/orders/'+o['id']+'/curtains/2/completion',dict(done=True,revision=0)).status_code==200
+    with transaction() as s:assert s['orders'][o['id']]['manufacturing_status']=='listo'
+    # Completed physical units cannot be silently modified from the owner's editor either.
+    stored=client.get('/admin/interno/api/orders/'+o['id']).json['order']
+    post(client,'/orders/'+o['id']+'/status',dict(status='presupuesto',revision=stored['revision'],confirm=True))
+    stored=client.get('/admin/interno/api/orders/'+o['id']).json['order']
+    body=draft(2);body.update(id=o['id'],revision=stored['revision']);body['groups'][0]['base']['height_cm']=210
+    assert post(client,'/orders',body).status_code==400
+    duplicate=post(client,'/orders/'+o['id']+'/duplicate',{}).json['order']
+    assert duplicate['curtain_progress']=={} and duplicate['manufacturing_status']=='pendiente'
+
+def test_completion_permissions_and_single_curtain_export(client):
+    o=approve(client);c=collaborator(client,['orders','bom','bom_export'])
+    assert op(c,'/orders/'+o['id']+'/curtains/1/completion',dict(done=True,revision=0)).status_code==403
+    raw=c.get('/admin/operativo/api/orders/'+o['id']+'/bom.xlsx?curtain=1')
+    assert raw.status_code==200
+    book=load_workbook(BytesIO(raw.data));assert len(list(book['Cortinas'].values))==2
+    assert c.get('/admin/operativo/api/orders/'+o['id']+'/bom.xlsx?curtain=2').status_code==400

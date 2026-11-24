@@ -30,6 +30,7 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python tests/browser_smoke.py
       - run: python tests/browser_upgrade.py
+      - run: python tests/browser_operational.py
       - uses: actions/upload-artifact@v4
         with:
           name: capturas-responsive
