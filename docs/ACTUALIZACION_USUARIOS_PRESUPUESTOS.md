@@ -158,7 +158,7 @@ respaldo antes de migración, persistencia y móvil/escritorio.
   `tests/browser_smoke.py`, `tests/browser_upgrade.py`, `.github/workflows/tests.yml`.
 - Documentación: este archivo.
 
-Resultado local: 47 pruebas aprobadas y una prueba PostgreSQL omitida por falta de
+Resultado local: 50 pruebas aprobadas y una prueba PostgreSQL omitida por falta de
 servicio local; dos recorridos Chrome de interfaz aprobados. La CI ejecuta también
 PostgreSQL 16 y ambos recorridos Chromium. No hay variables nuevas obligatorias ni
 cambios de dependencias. Si `dueno` ya existe como colaborador heredado, elegir
@@ -188,3 +188,8 @@ pasa a listo; no se puede marcar listo/entregado si falta una cortina.
 `tests/browser_operational.py` prueba dos pedidos, un borrador oculto, selección de
 una sola cortina, persistencia de Realizada, cancelación de reapertura, Excel
 individual y ausencia de otras solapas al hacer scroll, en móvil y escritorio.
+
+La dirección principal redirige al tablero correspondiente al rol. Una sesión
+revocada o un formulario de ingreso vencido vuelve al acceso con un token nuevo,
+sin ejecutar ni reenviar la solicitud anterior. Las APIs comerciales siguen
+bloqueadas para colaboradores.

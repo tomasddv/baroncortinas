@@ -63,6 +63,7 @@ with sync_playwright() as p:
     staff=browser.new_context(viewport={'width':390,'height':844})
     op=staff.new_page();op.on('pageerror',lambda e:errors.append(str(e)))
     op.goto(BASE+'/admin/login');op.locator('input[name=username]').fill('colaborador-ui');op.locator('input[name=password]').fill('clave-ui-colaborador');op.get_by_role('button',name='Ingresar',exact=False).click()
+    op.goto(BASE+'/')
     op.get_by_role('heading',name='Tablero de trabajo',exact=True).wait_for()
     op.locator('#op-order-selector').get_by_label('Seleccionar presupuesto aprobado',exact=True).select_option(o['id'])
     op.locator('#op-order-selector').get_by_label('Seleccionar cortina',exact=True).select_option('1')

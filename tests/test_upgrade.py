@@ -202,3 +202,24 @@ def test_completion_permissions_and_single_curtain_export(client):
     assert raw.status_code==200
     book=load_workbook(BytesIO(raw.data));assert len(list(book['Cortinas'].values))==2
     assert c.get('/admin/operativo/api/orders/'+o['id']+'/bom.xlsx?curtain=2').status_code==400
+
+
+def test_revoked_session_post_returns_to_login_without_executing(client):
+    c=collaborator(client,['orders'])
+    post(client,'/users',dict(username='operario',enabled=False,permissions=[]))
+    response=c.post('/admin/salir',data={'csrf':'op-csrf'})
+    assert response.status_code==303 and response.location.endswith('/admin/login')
+    assert c.get(response.location).status_code==200
+
+def test_stale_login_form_gets_fresh_token_and_never_authenticates(client):
+    c=app.test_client();c.get('/admin/login')
+    r=c.post('/admin/login',data=dict(username='LUCAS',password='anything',csrf='expired-token'))
+    assert r.status_code==303
+    with c.session_transaction() as se:assert not se.get('admin_auth')
+    assert c.get(r.location).status_code==200
+    with c.session_transaction() as se:assert se.get('csrf')
+
+def test_staff_root_routes_to_operational_not_forbidden(client):
+    c=collaborator(client,['orders'])
+    r=c.get('/');assert r.status_code==302 and r.location.endswith('/admin/operativo/')
+    assert c.get('/admin/interno/api/state').status_code==403

@@ -179,7 +179,16 @@ def security_headers(response):
 @app.before_request
 def admin_guards():
     from access import live_session
+    was_authenticated=admin_ok()
     live_session()
+    if was_authenticated and not admin_ok() and request.method in ('POST','PUT','PATCH','DELETE'):
+        # A revoked/renamed session must not submit a stale form or become a raw 403.
+        if request.is_json:
+            return jsonify(error='Tu sesión venció. Volvé a ingresar.',login_url=url_for('admin_login')),401
+        flash('Tu sesión venció o fue actualizada. Volvé a ingresar con tu usuario actual.', 'error')
+        return redirect(url_for('admin_login'),code=303)
+    if session.get('role')=='staff' and request.path=='/' and request.method=='GET':
+        return redirect('/admin/operativo/')
     if session.get('role')=='staff' and not (request.path.startswith(('/admin/operativo','/static/','/media/')) or request.path in ('/admin/login','/admin/salir','/tema.css','/health')):
         abort(403)
     private_legacy = request.path.startswith(('/cotizar/', '/api/')) or request.path == '/carrito'
@@ -189,6 +198,10 @@ def admin_guards():
         provided = request.headers.get('X-CSRF-Token') or request.form.get("csrf", "")
         expected = session.get("csrf", "")
         if not expected or not hmac.compare_digest(provided, expected):
+            if request.endpoint=='admin_login':
+                # Reload the login form with a fresh token; never replay credentials.
+                flash('El formulario de acceso venció. Ingresá nuevamente.', 'error')
+                return redirect(url_for('admin_login'),code=303)
             abort(403)
     if session.get('role') == 'staff' and request.path.startswith('/admin') and not request.path.startswith('/admin/operativo') and request.path not in ('/admin/salir','/admin/login'):
         abort(403)
