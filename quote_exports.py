@@ -10,7 +10,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
 from reportlab.lib.utils import ImageReader
-from quoting import COLUMNS, commercial_rows, client_measurement_note
+from quoting import COLUMNS, commercial_rows
 from storage import read_image
 
 BLUE='#244574'
@@ -32,7 +32,7 @@ def xlsx(order,columns,bom=False,reservations=()):
     sheet.append([order['price_snapshot']['brand'].get('brand','BARÓN'),order['number']])
     sheet.append(['Cliente',safe(order['customer']),'Localidad',safe(order['city'])])
     sheet.append(['Fecha',order['date'],'Vigencia',order['valid_until']])
-    sheet.append(['Medidas',client_measurement_note(order)] if not bom and order.get('mentirita') else [])
+    sheet.append([])
     if bom:
         keys=['curtain','name','quantity','unit','unit_cost','subtotal','cut_width_cm','cut_height_cm','billable_quantity','price_unit','remnant_id']
         sheet.append(['Cortina','Material','Cantidad física','Unidad','Costo unitario','Subtotal costo','Ancho corte cm','Alto corte cm','Cantidad facturable','Unidad precio','Retazo elegido'])
@@ -119,7 +119,6 @@ def pdf(order,columns):
     heading=ParagraphStyle('head',parent=style,fontName='Helvetica-Bold',fontSize=10,leading=14)
     def para(value,sty=style):return Paragraph(escape(str(value)).replace('\n','<br/>'),sty)
     story=[para('Cliente: '+order['customer']+' · '+order['city']),Spacer(1,7)]
-    if order.get('mentirita'):story.extend([para(client_measurement_note(order)),Spacer(1,5)])
     data=[[para(COLUMNS[k],ParagraphStyle('th',parent=style,fontName='Helvetica-Bold')) for k in columns]]
     for row in commercial_rows(order):data.append([para(currency(row[k]) if k in ('unit_price','subtotal') else row[k]) for k in columns])
     weights={'detail':2.5,'material':1.5,'room':1.2,'quantity':1.0,'width_cm':.9,'height_cm':.9,'color':1.1,'unit_price':1.25,'subtotal':1.25}

@@ -254,11 +254,12 @@ def test_margin_changes_only_client_dimensions_and_exports(client):
     prefix='/admin/interno/api/orders/'+o['id']+'/export/'
     commercial=load_workbook(BytesIO(client.get(prefix+'xlsx').data)).active
     assert commercial['D6'].value==160 and commercial['E6'].value==190
-    assert 'margen' in commercial['B4'].value
+    assert commercial['B4'].value is None
+    assert not any('Medidas de referencia' in str(c.value) or '10 cm de margen' in str(c.value) for cells in commercial for c in cells)
     technical=load_workbook(BytesIO(client.get(prefix+'bom').data))
     assert technical['Cortinas']['E2'].value==150 and technical['Cortinas']['F2'].value==180
     document=''.join(p.extract_text() for p in PdfReader(BytesIO(client.get(prefix+'pdf').data)).pages)
-    assert '10 cm de margen' in document
+    assert '10 cm de margen' not in document and 'Medidas de referencia' not in document
 
 
 def test_happy_choice_is_reversible_idempotent_and_preserves_stock(client):

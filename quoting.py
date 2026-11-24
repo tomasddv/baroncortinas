@@ -266,11 +266,6 @@ def commercial_rows(order):
     return list(rows.values())
 
 
-def client_measurement_note(order):
-    return ('Medidas de referencia: incluyen 10 cm de margen en ancho y alto. '
-            'Las medidas técnicas de fabricación se mantienen sin ese margen.') if order.get('mentirita') else ''
-
-
 def apply_price_choice(order,choice):
     """Always recalculate from the normal unit prices; never compound an uplift."""
     if order.get('government'):raise ValueError('El presupuesto gubernamental usa un único importe final')
