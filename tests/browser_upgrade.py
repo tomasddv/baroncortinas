@@ -33,6 +33,7 @@ with sync_playwright() as p:
     form.get_by_label('Nombre',exact=True).fill('Colaborador UI')
     form.get_by_label('Contraseña inicial',exact=True).fill('clave-ui-colaborador')
     form.get_by_label('Visualizar despiece',exact=True).check()
+    form.get_by_label('Actualizar estados de fabricación',exact=True).check()
     form.get_by_label('Exportar despiece a Excel sin precios',exact=True).check()
     form.get_by_role('button',name='Crear colaborador',exact=True).click()
     page.get_by_text('Usuario guardado. Las sesiones anteriores fueron revocadas.',exact=True).wait_for()
@@ -69,6 +70,16 @@ with sync_playwright() as p:
     op.get_by_text('Despiece de fabricación',exact=True).click()
     assert op.get_by_role('link',name='Exportar despiece Excel',exact=True).count()==1
     assert op.locator('body').evaluate('(e)=>e.scrollWidth<=innerWidth')
+    entry=op.locator('form').filter(has=op.get_by_role('heading',name='Entrada de artículos',exact=True))
+    entry.get_by_label('Cantidad',exact=True).fill('5')
+    with op.expect_response(lambda r:r.url.endswith('/admin/operativo/api/component-lots') and r.request.method=='POST') as stock_entry:
+        entry.get_by_role('button',name='Agregar stock',exact=True).click()
+    assert stock_entry.value.status==200
+    op.get_by_label('Estado de fabricación',exact=True).select_option('en fabricación')
+    with op.expect_response(lambda r:r.url.endswith('/manufacturing') and r.request.method=='POST') as stage:
+        op.get_by_role('button',name='Guardar estado',exact=True).click()
+    assert stage.value.status==200
+    assert op.locator('#notice').inner_text()==''
     op.screenshot(path=str(OUT/'colaborador-mobile.png'),full_page=True)
     page.get_by_role('button',name='Usuarios y permisos',exact=True).click()
     form=page.locator('#users-fields form').filter(has=page.get_by_role('heading',name='colaborador-ui · staff',exact=True))
