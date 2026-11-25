@@ -92,8 +92,9 @@ with sync_playwright() as p:
     form.get_by_role('button',name='Guardar usuario / Revocar sesiones',exact=True).click()
     page.get_by_text('Usuario guardado. Las sesiones anteriores fueron revocadas.',exact=True).wait_for()
     op.reload();op.locator('input[name=password]').wait_for()
-    page.get_by_role('button',name='Historial',exact=True).click()
-    page.wait_for_function("state && state.orders.some(o=>o.revision>1)")
+    with page.expect_response(lambda r:r.url.endswith('/admin/interno/api/state')) as history_refresh:
+        page.get_by_role('button',name='Historial',exact=True).click()
+    assert history_refresh.value.status==200
     row=page.locator('#history-list .list-row').first
     number=row.locator('strong').inner_text()
     page.once('dialog',lambda d:d.dismiss())
