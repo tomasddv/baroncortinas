@@ -41,7 +41,7 @@ def body():
 
 def order_in(state, ident, revision=None):
     order = state['orders'].get(ident)
-    if not order:
+    if not order or order.get('archived_at'):
         abort(404)
     if revision is not None and revision != order['revision']:
         abort(409, description='Otro usuario modificó el pedido. Volvé a abrirlo antes de guardar.')
@@ -65,10 +65,12 @@ def workspace():
 def state_api():
     with transaction() as state:
         cfg = config(state)
-        orders = [{k:o.get(k) for k in ('id','number','customer','city','date','status','total','revision','updated_at')} for o in state['orders'].values()]
+        keys=('id','number','customer','city','date','status','total','revision','updated_at','archived_at')
+        orders = [{k:o.get(k) for k in keys} for o in state['orders'].values() if not o.get('archived_at')]
+        archived = [{k:o.get(k) for k in keys} for o in state['orders'].values() if o.get('archived_at')]
         lots = [dict(l,available_m=available(state,l)) for l in state['lots'].values()]
         components=[dict(l,available_qty=component_available(state,l)) for l in state['component_lots'].values()]
-        return jsonify(config=cfg,orders=orders,lots=lots,component_lots=components,movements=state['movements'][-200:],
+        return jsonify(config=cfg,orders=orders,archived_orders=archived,lots=lots,component_lots=components,movements=state['movements'][-200:],
                        columns=COLUMNS,preferences=state['preferences'].get(actor(),list(COLUMNS)))
 
 
@@ -182,6 +184,42 @@ def status(ident):
         unchanged=order['status']==data.get('status')
         transition(state,order,data.get('status'),actor())
         return jsonify(order=order,rows=commercial_rows(order),warnings=[],unchanged=unchanged)
+
+
+@bp.post('/api/orders/<ident>/archive')
+def archive_order(ident):
+    owner()
+    data=body()
+    if data.get('confirm') is not True:
+        raise ValueError('Confirmá que querés eliminar el presupuesto')
+    with transaction() as state:
+        order=order_in(state,ident,data.get('revision',-1))
+        previous=order['status']
+        if previous=='aprobado':
+            transition(state,order,'presupuesto',actor())
+        order.update(archived_at=now(),archived_by=actor(),archive_previous_status=previous,
+                     revision=order['revision']+1,updated_at=now())
+        audit(state,'eliminar presupuesto',actor(),order_id=ident,previous_status=previous)
+        return jsonify(ok=True)
+
+
+@bp.post('/api/orders/<ident>/restore')
+def restore_order(ident):
+    owner()
+    data=body()
+    if data.get('confirm') is not True:
+        raise ValueError('Confirmá la recuperación del presupuesto')
+    with transaction() as state:
+        order=state['orders'].get(ident)
+        if not order or not order.get('archived_at'):
+            abort(404)
+        if data.get('revision')!=order['revision']:
+            abort(409)
+        for key in ('archived_at','archived_by','archive_previous_status'):
+            order.pop(key,None)
+        order.update(status='presupuesto',revision=order['revision']+1,updated_at=now())
+        audit(state,'recuperar presupuesto',actor(),order_id=ident)
+        return jsonify(ok=True)
 
 
 @bp.post('/api/orders/<ident>/bom')

@@ -14,7 +14,7 @@ STAGES=('pendiente','en fabricación','listo','entregado')
 def select(data,keys):return {k:data[k] for k in keys if k in data}
 def approved(s,ident):
     o=s['orders'].get(ident)
-    if not o or o['status']!='aprobado':abort(404)
+    if not o or o.get('archived_at') or o['status']!='aprobado':abort(404)
     return o
 def safe_order(o,permissions):
     result=select(o,('id','number','customer','city','date','revision','technical_notes','manufacturing_status','manufacturing_revision'))
@@ -39,7 +39,7 @@ def state():
     permissions={k:allowed(k) for k in PERMISSIONS}
     with transaction() as s:
         cfg=config(s);result=dict(permissions=permissions,stages=STAGES)
-        if permissions['orders']:result['orders']=[safe_order(o,permissions) for o in s['orders'].values() if o['status']=='aprobado']
+        if permissions['orders']:result['orders']=[safe_order(o,permissions) for o in s['orders'].values() if o['status']=='aprobado' and not o.get('archived_at')]
         if permissions['stock'] or permissions['remnants'] or permissions['stock_add'] or permissions['remnants_edit']:
             result['materials']=[dict(id=m['id'],name=m['name'],colors=[select(c,('id','name')) for c in m['colors'] if not c.get('deleted')]) for m in cfg['materials'] if not m.get('deleted')]
             result['components']=[select(c,('id','name','unit','category','minimum_qty')) for c in cfg['stock_components'] if not c.get('deleted')]

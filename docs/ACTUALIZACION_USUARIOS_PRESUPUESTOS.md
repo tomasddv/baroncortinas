@@ -193,3 +193,9 @@ La dirección principal redirige al tablero correspondiente al rol. Una sesión
 revocada o un formulario de ingreso vencido vuelve al acceso con un token nuevo,
 sin ejecutar ni reenviar la solicitud anterior. Las APIs comerciales siguen
 bloqueadas para colaboradores.
+
+## Eliminar y recuperar presupuestos
+
+En Historial, Eliminar requiere confirmación y mueve el presupuesto a Papelera. Solo LUCAS/propietario puede hacerlo. La eliminación conserva número, precios, despiece, auditoría y marcas de cortinas realizadas; no borra registros ni descuenta stock físico. Si estaba aprobado, libera reservas en la misma transacción. Un presupuesto con consumo histórico no permite esta operación. Los eliminados no aparecen en fabricación ni permiten exportar por URL directa.
+
+Activar Papelera y pulsar Restaurar recupera el mismo número como Presupuesto. Para reservar materiales debe aprobarse nuevamente. Las revisiones evitan eliminar una versión modificada por otro usuario.
