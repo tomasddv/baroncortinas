@@ -6,7 +6,7 @@ from private_store import transaction
 from quoting import audit,now,text
 PERMISSIONS={
  'orders':'Visualizar pedidos aprobados','stock':'Visualizar stock','stock_add':'Agregar stock',
- 'stock_edit':'Modificar stock','bom':'Visualizar despiece','bom_edit':'Modificar despiece',
+ 'stock_edit':'Modificar stock','bom':'Visualizar despiece',
  'remnants':'Consultar retazos','remnants_edit':'Agregar y modificar retazos',
  'bom_export':'Exportar despiece a Excel sin precios','manufacturing':'Actualizar estados de fabricación',
  'contacts':'Visualizar datos de contacto de clientes'}
@@ -60,7 +60,8 @@ def allowed(key):
         return bool(u.get('enabled') and u.get('version')==session.get('version') and key in u.get('permissions',[]))
 def require(key):
     if not allowed(key):abort(403)
-def public_user(u):return {k:v for k,v in u.items() if k!='password_hash'}
+def public_user(u):
+    return {k:([p for p in v if p in PERMISSIONS] if k=='permissions' else v) for k,v in u.items() if k!='password_hash'}
 
 def write_user(state,data,actor):
     users=initialize(state);name=text(data.get('username',''),60)
@@ -68,7 +69,7 @@ def write_user(state,data,actor):
     old=users.get(name)
     if data.get('create') and old:raise ValueError('Ese nombre de usuario ya existe')
     role=old['role'] if old else 'staff'
-    perms=data.get('permissions',old.get('permissions',DEFAULTS) if old else DEFAULTS)
+    perms=data.get('permissions',[p for p in old.get('permissions',DEFAULTS) if p in PERMISSIONS] if old else DEFAULTS)
     if not isinstance(perms,list) or set(perms)-PERMISSIONS.keys():raise ValueError('Permisos inválidos')
     password=data.get('password','')
     if password and (not isinstance(password,str) or not 10<=len(password)<=200):raise ValueError('Contraseña: entre 10 y 200 caracteres')

@@ -85,13 +85,17 @@ def test_manual_government_notes_and_preservation(client):
     ordinary=save(client,data|{'government':False});assert set(ordinary['payments'])=={'Transferencia','Efectivo','Tarjeta'}
     assert ordinary['total']==old['total']+2469.12
 
-def test_operational_edit_reservations_and_manufacturing(client):
+def test_operational_read_only_bom_and_manufacturing(client):
     o=approve(client);c=collaborator(client,list(PERMISSIONS))
-    state=c.get('/admin/operativo/api/state').json;safe=state['orders'][0];lines=safe['bom'];lines[0]['cut_height_cm']=210
-    r=op(c,'/orders/'+o['id']+'/bom',dict(revision=o['revision'],lines=lines));assert r.status_code==200,r.data
     with transaction() as s:
+        s['users']['operario']['permissions'].append('bom_edit')
+        before=deepcopy({k:s[k] for k in ('orders','reservations','lots','movements')})
+    state=c.get('/admin/operativo/api/state').json;safe=state['orders'][0];lines=safe['bom'];lines[0]['cut_height_cm']=210
+    r=op(c,'/orders/'+o['id']+'/bom',dict(revision=o['revision'],lines=lines));assert r.status_code==403,r.data
+    with transaction() as s:
+        assert {k:s[k] for k in before}==before
         order=s['orders'][o['id']];assert order['total']==o['total']
-        reserved=sum(r.get('length_m',0) for r in s['reservations'] if r['status']=='reservado');assert reserved==2.1
+        reserved=sum(r.get('length_m',0) for r in s['reservations'] if r['status']=='reservado');assert reserved==2.0
     assert op(c,'/orders/'+o['id']+'/manufacturing',dict(status='en fabricación',revision=0)).status_code==200
     assert op(c,'/orders/'+o['id']+'/manufacturing',dict(status='listo',revision=0)).status_code==409
 
@@ -178,7 +182,7 @@ def test_curtain_completion_atomic_idempotent_and_reopen(client):
     data=c.get('/admin/operativo/api/state').json['orders'][0]
     assert data['curtain_progress']['1']['done'] and not data['curtain_progress']['2']['done']
     lines=data['bom'];lines[0]['cut_height_cm']=220
-    assert op(c,'/orders/'+o['id']+'/bom',dict(lines=lines,revision=data['revision'])).status_code==400
+    assert op(c,'/orders/'+o['id']+'/bom',dict(lines=lines,revision=data['revision'])).status_code==403
     assert op(c,path,dict(done=False,revision=1)).status_code==400
     assert op(c,path,dict(done=False,revision=0,confirm=True)).status_code==409
     assert op(c,path,dict(done=False,revision=1,confirm=True)).status_code==200

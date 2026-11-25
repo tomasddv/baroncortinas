@@ -1,5 +1,4 @@
 """Operational boundary. Every response uses positive allowlists, including exports."""
-from copy import deepcopy
 from io import BytesIO
 from flask import Blueprint,abort,jsonify,request,render_template,send_file,session
 from openpyxl import Workbook
@@ -121,37 +120,13 @@ def manufacturing(ident):
     return jsonify(ok=True)
 @bp.post('/api/orders/<ident>/bom')
 def edit_bom(ident):
-    require('orders');require('bom');require('bom_edit');data=request.get_json() or {}
-    from quoting import transition
-    with transaction() as s:
-        o=approved(s,ident)
-        if data.get('revision')!=o['revision']:abort(409)
-        changes=data.get('lines')
-        if not isinstance(changes,list) or len(changes)!=len(o['bom']):raise ValueError('Conservá las líneas del despiece')
-        original=deepcopy(o['bom']);byid={l['id']:l for l in o['bom']}
-        if len({l.get('id') for l in changes})!=len(byid):raise ValueError('Líneas repetidas o inexistentes')
-        clean=[]
-        for change in changes:
-            l=deepcopy(byid[change['id']])
-            if l.get('fabric'):
-                l['cut_width_cm']=num(change.get('cut_width_cm'),'Ancho corte',1,600)
-                l['cut_height_cm']=num(change.get('cut_height_cm'),'Alto corte',1,1000)
-                l['quantity']=l['cut_width_cm']*l['cut_height_cm']/10000
-            else:l['quantity']=num(change.get('quantity'),'Cantidad',0,1e8)
-            clean.append(l)
-        from production_progress import protect_completed
-        protect_completed(o,dict(o,bom=clean))
-        # Reassign reservations atomically. Failure restores original BOM and reservations.
-        transition(s,o,'presupuesto',session['user']);o['bom']=clean
-        transition(s,o,'aprobado',session['user'])
-        audit(s,'editar despiece operativo',session['user'],order_id=ident,before=original,after=clean)
-    return jsonify(ok=True)
+    abort(403, description='El despiece operativo es solo de consulta')
 @bp.get('/api/orders/<ident>/remnants')
 def compatible(ident):
     require('orders');require('bom');require('remnants')
     with transaction() as s:
         o=approved(s,ident)
-        return jsonify({l['id']:[select(r,('id','width_cm','length_m','location')) for r in matches(s,l)] for l in o['bom'] if l.get('fabric')})
+        return jsonify({l['id']:[dict(select(r,('id','width_cm','length_m','location')),available_m=available(s,r)) for r in matches(s,l)] for l in o['bom'] if l.get('fabric')})
 
 
 @bp.post('/api/orders/<ident>/curtains/<int:curtain>/completion')

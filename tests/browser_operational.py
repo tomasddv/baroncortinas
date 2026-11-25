@@ -37,7 +37,7 @@ with sync_playwright() as p:
     second=owner_post('/orders',dict(customer='Pedido B',groups=[dict(quantity=1,base=base|{'room':'Dormitorio'})]))['order']
     pending=owner_post('/orders',dict(customer='Borrador oculto',groups=[dict(quantity=1,base=base)]))['order']
     for o in (first,second):owner_post('/orders/'+o['id']+'/status',dict(status='aprobado',revision=o['revision'],confirm=True))
-    owner_post('/users',dict(username='operador',password='clave-operativa-123',permissions=['orders','bom','bom_export','stock','stock_add','stock_edit','manufacturing'],enabled=True))
+    owner_post('/users',dict(username='operador',password='clave-operativa-123',permissions=['orders','bom','bom_export','stock','stock_add','stock_edit','manufacturing','remnants'],enabled=True))
     context2=browser.new_context(viewport={'width':390,'height':844});op=context2.new_page()
     op.on('pageerror',lambda e:errors.append(str(e)))
     op.goto(BASE+'/admin/login');op.locator('input[name=username]').fill('operador');op.locator('input[name=password]').fill('clave-operativa-123');op.get_by_role('button',name='Ingresar',exact=False).click()
@@ -55,7 +55,19 @@ with sync_playwright() as p:
     op.get_by_role('tab',name='Despiece',exact=True).click();isolated('op-bom')
     assert op.locator('#op-bom-content .selected-curtain').count()==1
     assert op.locator('#op-bom-content .bom-line').count()==3
+    assert op.locator('#op-bom-content .bom-line input').count()==0
+    assert op.get_by_role('button',name='Guardar despiece',exact=True).count()==0
+    assert 'Ancho de corte:' in op.locator('#op-bom-content').inner_text()
     assert op.locator('#op-bom-content .bom-line[data-curtain="2"]').count()==0
+    op.get_by_role('button',name='Buscar retazos compatibles',exact=True).click()
+    op.locator('#op-bom-content .compatible-remnants li').first.wait_for()
+    count=op.locator('#op-bom-content .compatible-remnants li').count()
+    assert count>=2
+    assert 'Ancho:' in op.locator('#op-bom-content .compatible-remnants li').first.inner_text()
+    assert 'Ubicación:' in op.locator('#op-bom-content .compatible-remnants li').first.inner_text()
+    with op.expect_response(lambda r:r.url.endswith('/remnants')):
+        op.get_by_role('button',name='Buscar retazos compatibles',exact=True).click()
+    assert op.locator('#op-bom-content .compatible-remnants li').count()==count
     check=op.locator('#op-bom-content').get_by_label('Realizada',exact=True)
     with op.expect_response(lambda r:'/curtains/1/completion' in r.url) as finished:check.check()
     assert finished.value.status==200

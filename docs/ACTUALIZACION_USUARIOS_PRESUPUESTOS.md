@@ -199,3 +199,9 @@ bloqueadas para colaboradores.
 En Historial, Eliminar requiere confirmación y mueve el presupuesto a Papelera. Solo LUCAS/propietario puede hacerlo. La eliminación conserva número, precios, despiece, auditoría y marcas de cortinas realizadas; no borra registros ni descuenta stock físico. Si estaba aprobado, libera reservas en la misma transacción. Un presupuesto con consumo histórico no permite esta operación. Los eliminados no aparecen en fabricación ni permiten exportar por URL directa.
 
 Activar Papelera y pulsar Restaurar recupera el mismo número como Presupuesto. Para reservar materiales debe aprobarse nuevamente. Las revisiones evitan eliminar una versión modificada por otro usuario.
+
+## Despiece operativo de consulta
+
+El tablero operativo muestra piezas, cantidades físicas y medidas técnicas de corte como texto. No permite editar ni guardar el despiece, incluso con permisos antiguos; POST operativo de despiece responde 403 sin modificar reservas ni precios. Se retiró el permiso de edición del formulario de usuarios. Las correcciones se realizan desde el cotizador del propietario.
+
+Buscar retazos compatibles muestra una lista vertical por tela de la cortina seleccionada, con código, ancho, largo disponible y ubicación. Repetir la búsqueda reemplaza el resultado anterior. Es una consulta: no asigna ni consume el retazo.
