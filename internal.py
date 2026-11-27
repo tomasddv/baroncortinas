@@ -41,7 +41,7 @@ def body():
 
 def order_in(state, ident, revision=None):
     order = state['orders'].get(ident)
-    if not order:
+    if not order or order.get('archived_at'):
         abort(404)
     if revision is not None and revision != order['revision']:
         abort(409, description='Otro usuario modificó el pedido. Volvé a abrirlo antes de guardar.')
@@ -65,10 +65,12 @@ def workspace():
 def state_api():
     with transaction() as state:
         cfg = config(state)
-        orders = [{k:o.get(k) for k in ('id','number','customer','city','date','status','total','revision','updated_at')} for o in state['orders'].values()]
+        keys=('id','number','customer','city','date','status','total','revision','updated_at','archived_at')
+        orders = [{k:o.get(k) for k in keys} for o in state['orders'].values() if not o.get('archived_at')]
+        archived = [{k:o.get(k) for k in keys} for o in state['orders'].values() if o.get('archived_at')]
         lots = [dict(l,available_m=available(state,l)) for l in state['lots'].values()]
         components=[dict(l,available_qty=component_available(state,l)) for l in state['component_lots'].values()]
-        return jsonify(config=cfg,orders=orders,lots=lots,component_lots=components,movements=state['movements'][-200:],
+        return jsonify(config=cfg,orders=orders,archived_orders=archived,lots=lots,component_lots=components,movements=state['movements'][-200:],
                        columns=COLUMNS,preferences=state['preferences'].get(actor(),list(COLUMNS)))
 
 
@@ -78,9 +80,9 @@ def preview():
     with transaction() as state:
         cfg = config(state)
         old=order_in(state,data['id']) if data.get('id') else None
-        same=old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct']
+        same=old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct'] and (data.get('government') is True)==old.get('government',False) and (not old.get('government') or float(data.get('government_total',0))==old.get('government_total'))
         order = quote_order(data,old['price_snapshot'] if same and not data.get('reprice') else cfg)
-        if old:
+        if old and not order.get('government'):
             order['happy_rate_snapshot']=old.get('happy_rate_snapshot',cfg['happy_markup_pct']) if not data.get('reprice') else cfg['happy_markup_pct']
             apply_price_choice(order,old.get('price_choice','normal'))
         return jsonify(order=order,rows=commercial_rows(order),warnings=stock_warnings(state,order,cfg))
@@ -97,16 +99,19 @@ def save_order():
         if old and old['status']!='presupuesto':
             raise ValueError('Volvé a presupuesto para editar. Los pedidos con consumo se duplican para un nuevo trabajo.')
         # Unchanged group saves retain quoted prices even after catalogue updates.
-        same = old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct']
+        same = old and data.get('groups')==old['groups'] and float(data.get('discount_pct',0))==old['discount_pct'] and (data.get('government') is True)==old.get('government',False) and (not old.get('government') or float(data.get('government_total',0))==old.get('government_total'))
         if same and not data.get('reprice'):
             order = deepcopy(old)
-            for key,limit in [('customer',150),('city',150),('date',10),('valid_until',10),('notes',2000)]:
+            for key,limit in [('customer',150),('city',150),('date',10),('valid_until',10),('notes',10000),('contact',300),('technical_notes',4000)]:
                 order[key]=text(data.get(key,''),limit)
         else:
             order = quote_order(data,cfg)
-            if old:
+            if old and not order.get('government'):
                 order['happy_rate_snapshot']=old.get('happy_rate_snapshot',cfg['happy_markup_pct']) if not data.get('reprice') else cfg['happy_markup_pct']
                 apply_price_choice(order,old.get('price_choice','normal'))
+        if old:
+            from production_progress import protect_completed
+            protect_completed(old,order)
         order['mentirita']=data.get('mentirita') is True
         order.setdefault('happy_rate_snapshot',cfg['happy_markup_pct'])
         if not order['customer']:
@@ -160,6 +165,7 @@ def duplicate(ident):
         state['sequence']+=1
         new_id=uuid.uuid4().hex
         order.update(id=new_id,number=f'BAR-{state["sequence"]:06d}',status='presupuesto',revision=1,created_at=now(),updated_at=now())
+        order.update(curtain_progress={},manufacturing_status='pendiente',manufacturing_revision=0)
         # A duplicate is a new job: no stock allocations or inherited remnant selection.
         for line in order['bom']:
             line.pop('remnant_id',None)
@@ -178,6 +184,42 @@ def status(ident):
         unchanged=order['status']==data.get('status')
         transition(state,order,data.get('status'),actor())
         return jsonify(order=order,rows=commercial_rows(order),warnings=[],unchanged=unchanged)
+
+
+@bp.post('/api/orders/<ident>/archive')
+def archive_order(ident):
+    owner()
+    data=body()
+    if data.get('confirm') is not True:
+        raise ValueError('Confirmá que querés eliminar el presupuesto')
+    with transaction() as state:
+        order=order_in(state,ident,data.get('revision',-1))
+        previous=order['status']
+        if previous=='aprobado':
+            transition(state,order,'presupuesto',actor())
+        order.update(archived_at=now(),archived_by=actor(),archive_previous_status=previous,
+                     revision=order['revision']+1,updated_at=now())
+        audit(state,'eliminar presupuesto',actor(),order_id=ident,previous_status=previous)
+        return jsonify(ok=True)
+
+
+@bp.post('/api/orders/<ident>/restore')
+def restore_order(ident):
+    owner()
+    data=body()
+    if data.get('confirm') is not True:
+        raise ValueError('Confirmá la recuperación del presupuesto')
+    with transaction() as state:
+        order=state['orders'].get(ident)
+        if not order or not order.get('archived_at'):
+            abort(404)
+        if data.get('revision')!=order['revision']:
+            abort(409)
+        for key in ('archived_at','archived_by','archive_previous_status'):
+            order.pop(key,None)
+        order.update(status='presupuesto',revision=order['revision']+1,updated_at=now())
+        audit(state,'recuperar presupuesto',actor(),order_id=ident)
+        return jsonify(ok=True)
 
 
 @bp.post('/api/orders/<ident>/bom')
@@ -220,6 +262,8 @@ def save_bom(ident):
         # Exactly one fabric allocation per curtain; cannot bypass stock by deleting it.
         if sorted(l['curtain'] for l in clean if l.get('fabric')) != [i+1 for i,u in enumerate(order['units']) if u.get('material_id')]:
             raise ValueError('Conservá una línea física de tela por cortina')
+        from production_progress import protect_completed
+        protect_completed(order,dict(order,bom=clean))
         audit(state,'editar despiece',actor(),order_id=ident,before=order['bom'],after=clean)
         order['bom']=clean
         order['revision']+=1
@@ -409,3 +453,56 @@ def export(ident,kind):
         columns=state['preferences'].get(actor(),list(COLUMNS))
         content,mime,extension=export_file(order,columns,kind,[r for r in state['reservations'] if r['order_id']==ident])
         return send_file(BytesIO(content),mimetype=mime,as_attachment=True,download_name=order['number']+'.'+extension)
+
+
+@bp.get('/api/users')
+def users_list():
+    owner()
+    from access import initialize,public_user,PERMISSIONS
+    with transaction() as state:
+        return jsonify(users=[public_user(u) for u in initialize(state).values()],permissions=PERMISSIONS,current_user=actor())
+
+@bp.post('/api/users')
+def users_save():
+    owner()
+    from access import write_user
+    with transaction() as state:
+        user=write_user(state,body(),actor())
+    return jsonify(user=user)
+
+
+@bp.get('/api/orders/<ident>/preview')
+def official_preview(ident):
+    from quote_exports import pdf
+    import pymupdf
+    from flask import Response
+    with transaction() as state:
+        order=order_in(state,ident)
+        raw=pdf(order,state['preferences'].get(actor(),list(COLUMNS)))
+        with pymupdf.open(stream=raw,filetype='pdf') as doc:count=len(doc)
+    images=''.join(f'<img alt="Página {i+1}" src="{request.path}/{i+1}.png?revision={order["revision"]}" width="100%">' for i in range(count))
+    return Response('<!doctype html><html lang="es"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Presupuesto BARÓN</title><link rel="stylesheet" href="/static/official-preview.css"></head><body>'+images+'</body></html>',mimetype='text/html')
+
+@bp.get('/api/orders/<ident>/preview/<int:page>.png')
+def official_page(ident,page):
+    from quote_exports import pdf
+    import pymupdf
+    with transaction() as state:
+        raw=pdf(order_in(state,ident),state['preferences'].get(actor(),list(COLUMNS)))
+    with pymupdf.open(stream=raw,filetype='pdf') as doc:
+        if not 1<=page<=len(doc):abort(404)
+        raw=doc[page-1].get_pixmap(matrix=pymupdf.Matrix(1.5,1.5),alpha=False).tobytes('png')
+    return send_file(BytesIO(raw),mimetype='image/png')
+
+
+@bp.get('/api/activity')
+def activity():
+    owner()
+    kind=request.args.get('kind','stock');q=request.args.get('q','').casefold()
+    offset=int(num(request.args.get('offset',0),'Posición',0,1e9))
+    with transaction() as state:
+        if kind=='stock':items=state.get('stock_history',[])
+        elif kind=='users':items=[{k:a.get(k) for k in ('at','actor','action','order_id','username')} for a in state['audit']]
+        else:raise ValueError('Historial inválido')
+        items=[item for item in reversed(items) if q in ' '.join(str(v) for v in item.values()).casefold()]
+        return jsonify(items=items[offset:offset+100],total=len(items),offset=offset)

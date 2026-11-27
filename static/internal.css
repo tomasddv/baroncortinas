@@ -30,3 +30,7 @@ dialog{border:1px solid #dce4ed;border-radius:16px;padding:26px;max-width:560px;
 #history-export-formats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:22px 0}
 .history-format{min-height:90px;flex-direction:column;text-align:center}.history-format small{font-weight:400}
 @media(max-width:600px){.history-row-actions{width:100%}.history-row-actions>button{flex:1}#history-export-dialog .section-head{align-items:start}#history-export-dialog h2{margin-top:0}}
+
+.official-preview{width:100%;height:min(1100px,calc((100vw - 64px)*1.414));min-height:420px;border:0;background:#f7f7f7}.multiline{white-space:pre-wrap} input,select,textarea,table{color:#101820} .card details{margin:12px 0}
+
+.op-panel[hidden]{display:none!important}.selected-curtain{border-top:1px solid #cbd4de;margin-top:18px;padding-top:12px}

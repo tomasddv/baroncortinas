@@ -13,8 +13,8 @@ consultas son de solo lectura mientras hay reservas; para editar se vuelve a
 Presupuesto. El borrador que está en edición también puede preparar su despiece.
 
 El tilde «Mentirita» agrega 10 cm al ancho y alto solo en filas comerciales del
-presupuesto cliente (vista, PDF, imagen y XLSX), con una nota explícita de margen
-de referencia. No altera medidas ingresadas, precio por área, corte, despiece,
+presupuesto cliente (vista, PDF, imagen y XLSX). La configuración es interna y
+no incorpora una aclaración automática al documento comercial. No altera medidas ingresadas, precio por área, corte, despiece,
 reservas ni consumo. La preferencia se guarda por presupuesto.
 
 Al guardar aparece un diálogo 😊/😢. La feliz aplica el porcentaje de venta

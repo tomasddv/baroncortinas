@@ -22,11 +22,15 @@ jobs:
       - run: node --check static/internal.js
       - run: node --check static/settings.js
       - run: node --check static/inventory.js
+      - run: node --check static/users.js
+      - run: node --check static/operational.js
       - run: python -m pytest -q
         env:
           TEST_POSTGRES_URL: postgresql+psycopg://postgres:test@localhost:5432/baron_test
       - run: python -m playwright install --with-deps chromium
       - run: python tests/browser_smoke.py
+      - run: python tests/browser_upgrade.py
+      - run: python tests/browser_operational.py
       - uses: actions/upload-artifact@v4
         with:
           name: capturas-responsive

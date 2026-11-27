@@ -118,6 +118,7 @@ def resolve_groups(groups):
         raise ValueError('Agregá entre 1 y 50 grupos')
     result = []
     for gi, group in enumerate(groups):
+        if group.get('base',{}).get('product_id')=='manual' and 'quantity' not in group:raise ValueError('Ingresá la cantidad del artículo')
         qty = num(group.get('quantity',1),'Cantidad',1,100)
         if int(qty) != qty:
             raise ValueError('Cantidad entera requerida')
@@ -157,6 +158,18 @@ def quote_order(body, cfg):
     groups = deepcopy(body.get('groups'))
     units, bom = [], []
     for i, raw in enumerate(resolve_groups(groups)):
+        if raw.get('product_id')=='manual':
+            detail=text(raw.get('detail',''),300)
+            if not detail:raise ValueError('Ingresá el detalle del artículo personalizado')
+            price=num(raw.get('unit_price'),'Precio unitario')
+            unit=dict(group=raw['group'],index=raw['index'],product_id='manual',manual=True,
+                room=text(raw.get('room',''),100),detail=detail,
+                width_cm=num(raw['width_cm'],'Ancho',0,10000) if raw.get('width_cm') not in ('',None) else '',
+                height_cm=num(raw['height_cm'],'Alto',0,10000) if raw.get('height_cm') not in ('',None) else '',
+                material=text(raw.get('material',''),100),color=text(raw.get('color',''),100),
+                material_id='',color_id='',unit_price=price,subtotal=price,quantity=1)
+            units.append(unit)
+            continue
         from inventory import default_products,generic_unit
         product=next((p for p in cfg.get('products',default_products()) if p['id']==raw.get('product_id','roller') and p.get('active',True) and not p.get('deleted')),None)
         if not product:raise ValueError('Producto o modelo no disponible')
@@ -226,13 +239,15 @@ def quote_order(body, cfg):
     discount = num(body.get('discount_pct',0),'Descuento',0,100)
     subtotal = money(sum(u['subtotal'] for u in units))
     total = money(subtotal*(1-discount/100))
-    return dict(groups=groups,units=units,bom=bom,subtotal=subtotal,total=total,discount_pct=discount,
+    order = dict(groups=groups,units=units,bom=bom,subtotal=subtotal,total=total,discount_pct=discount,
         mentirita=body.get('mentirita') is True,price_choice='normal',happy_adjustment_pct=0,
         happy_rate_snapshot=cfg.get('happy_markup_pct',10),normal_total=total,
         payments={k:money(total*(1+v/100)) for k,v in cfg['payments'].items()},
         customer=text(body.get('customer',''),150),city=text(body.get('city',''),150),
         date=text(body.get('date',''),10),valid_until=text(body.get('valid_until',''),10),
-        notes=text(body.get('notes',''),2000),price_snapshot=deepcopy(cfg))
+        notes=text(body.get('notes',''),10000),technical_notes=text(body.get('technical_notes',''),4000),contact=text(body.get('contact',''),300),price_snapshot=deepcopy(cfg))
+    apply_government(order,body)
+    return order
 
 
 def commercial_rows(order):
@@ -241,7 +256,7 @@ def commercial_rows(order):
         key = tuple(str(u.get(k,'')) for k in ('room','detail','width_cm','height_cm','material','color','unit_price','zocalo','chain','mount','guides'))
         if key not in rows:
             rows[key] = {k:u[k] for k in COLUMNS}
-            if order.get('mentirita'):
+            if order.get('mentirita') and not u.get('manual'):
                 rows[key]['width_cm']+=10
                 rows[key]['height_cm']+=10
             rows[key]['quantity'] = 0
@@ -251,13 +266,9 @@ def commercial_rows(order):
     return list(rows.values())
 
 
-def client_measurement_note(order):
-    return ('Medidas de referencia: incluyen 10 cm de margen en ancho y alto. '
-            'Las medidas técnicas de fabricación se mantienen sin ese margen.') if order.get('mentirita') else ''
-
-
 def apply_price_choice(order,choice):
     """Always recalculate from the normal unit prices; never compound an uplift."""
+    if order.get('government'):raise ValueError('El presupuesto gubernamental usa un único importe final')
     if choice not in ('happy','normal'):
         raise ValueError('Elegí carita feliz o precio normal')
     pct=num(order.get('happy_rate_snapshot',10),'Ajuste de carita feliz %',0,1000) if choice=='happy' else 0
@@ -279,7 +290,7 @@ def audit(state, action, actor, **details):
 
 
 def available(state, lot):
-    reserved = sum(r['length_m'] for r in state['reservations'] if r['lot_id']==lot['id'] and r['status']=='reservado')
+    reserved = sum(r['length_m'] for r in state['reservations'] if r.get('kind')!='insumo' and r['lot_id']==lot['id'] and r['status']=='reservado')
     return round(lot['length_m']-reserved,6)
 
 
@@ -365,3 +376,21 @@ def transition(state, order, target, actor):
     order['revision']+=1
     order['updated_at']=now()
     audit(state,'estado',actor,order_id=order['id'],before=current,after=target)
+
+
+def apply_government(order,data):
+    enabled=data.get('government') is True
+    order['government']=enabled
+    if not enabled:
+        order.pop('government_total',None)
+        return
+    target=money(num(data.get('government_total',order['total']),'Importe final'))
+    cents=int(round(target*100));units=order['units'];weight=sum(u['unit_price'] for u in units)
+    # Allocate integer cents: displayed rows always add exactly to the final amount.
+    shares=[cents*u['unit_price']/weight if weight else cents/len(units) for u in units]
+    allocated=[math.floor(v) for v in shares]
+    for i in sorted(range(len(units)),key=lambda i:shares[i]-allocated[i],reverse=True)[:cents-sum(allocated)]:allocated[i]+=1
+    for u,amount in zip(units,allocated):
+        u['unit_price']=amount/100;u['subtotal']=amount/100;u.pop('normal_unit_price',None)
+    order.update(government_total=target,subtotal=target,total=target,normal_total=target,discount_pct=0,
+        happy_adjustment_pct=0,price_choice='normal',payments={'TOTAL PRESUPUESTO':target})
