@@ -20,6 +20,16 @@ def currency(value):
     return f'{value:,.2f}'.replace(',','_').replace('.',',').replace('_','.')
 
 
+def measurement(value):
+    if not isinstance(value,(int,float)):
+        return value
+    from decimal import Decimal
+    result=format(Decimal(str(value)),'f')
+    if '.' in result:
+        result=result.rstrip('0').rstrip('.')
+    return result.replace('.',',')
+
+
 def safe(value):
     # Excel text must never execute a customer-supplied formula.
     return "'"+value if isinstance(value,str) and value.startswith(('=','+','-','@')) else value
@@ -91,6 +101,12 @@ def xlsx(order,columns,bom=False,reservations=()):
             length=max((len(str(c.value or '')) for c in col),default=12)
             ws.column_dimensions[get_column_letter(col[0].column)].width=min(45,max(13,length+2))
         ws.print_area=ws.dimensions
+    if not bom:
+        for row in sheet.iter_rows(min_row=6,max_row=5+len(commercial_rows(order))):
+            for index,key in enumerate(columns):
+                cell=row[index]
+                if key in ('width_cm','height_cm') and isinstance(cell.value,(int,float)):
+                    cell.number_format='0' if float(cell.value).is_integer() else '0.##########'
     output=BytesIO();book.save(output)
     return output.getvalue()
 
@@ -120,7 +136,7 @@ def pdf(order,columns):
     def para(value,sty=style):return Paragraph(escape(str(value)).replace('\n','<br/>'),sty)
     story=[para('Cliente: '+order['customer']+' · '+order['city']),Spacer(1,7)]
     data=[[para(COLUMNS[k],ParagraphStyle('th',parent=style,fontName='Helvetica-Bold')) for k in columns]]
-    for row in commercial_rows(order):data.append([para(currency(row[k]) if k in ('unit_price','subtotal') else row[k]) for k in columns])
+    for row in commercial_rows(order):data.append([para(currency(row[k]) if k in ('unit_price','subtotal') else measurement(row[k]) if k in ('width_cm','height_cm') else row[k]) for k in columns])
     weights={'detail':2.5,'material':1.5,'room':1.2,'quantity':1.0,'width_cm':.9,'height_cm':.9,'color':1.1,'unit_price':1.25,'subtotal':1.25}
     total=sum(weights[k] for k in columns)
     table=Table(data,colWidths=[(page_width-144)*weights[k]/total for k in columns],repeatRows=1,hAlign='LEFT')

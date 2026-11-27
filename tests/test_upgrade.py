@@ -227,3 +227,21 @@ def test_staff_root_routes_to_operational_not_forbidden(client):
     c=collaborator(client,['orders'])
     r=c.get('/');assert r.status_code==302 and r.location.endswith('/admin/operativo/')
     assert c.get('/admin/interno/api/state').status_code==403
+
+def test_commercial_measurements_without_trailing_zeros(client):
+    data=draft(1)
+    data['groups'][0]['base'].update(width_cm=140,height_cm=180.5)
+    order=save(client,data)
+    root='/admin/interno/api/orders/'+order['id']+'/export/'
+    pdf=PdfReader(BytesIO(client.get(root+'pdf').data))
+    text='\n'.join(p.extract_text() for p in pdf.pages)
+    assert '140\n' in text and '180,5\n' in text
+    assert '140.0' not in text and '180.5' not in text
+    book=load_workbook(BytesIO(client.get(root+'xlsx').data))
+    sheet=book.active
+    headers=[c.value for c in sheet[5]]
+    width=sheet.cell(6,headers.index('Ancho (cm)')+1)
+    height=sheet.cell(6,headers.index('Alto (cm)')+1)
+    assert width.value==140 and width.number_format=='0'
+    assert height.value==180.5 and height.number_format=='0.##########'
+    assert client.get('/admin/interno/api/orders/'+order['id']).json['order']==order
